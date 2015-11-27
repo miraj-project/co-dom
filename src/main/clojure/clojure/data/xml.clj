@@ -11,9 +11,14 @@
   :author "Chris Houser"}
   clojure.data.xml
   (:require [clojure.string :as str])
-  (:import (javax.xml.stream XMLInputFactory
+  (:import [java.io ByteArrayInputStream StringReader StringWriter]
+           [javax.xml.stream XMLInputFactory
                              XMLStreamReader
-                             XMLStreamConstants)
+                             XMLStreamConstants]
+           [javax.xml.parsers DocumentBuilder DocumentBuilderFactory]
+           [javax.xml.transform.dom DOMSource]
+           [javax.xml.transform OutputKeys TransformerFactory]
+           [javax.xml.transform.stream StreamSource StreamResult]
            (java.nio.charset Charset)
            (java.io Reader)))
 
@@ -35,14 +40,53 @@
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
     (let [[attr-ns attr-name] (qualified-name k)]
+      ;; if v is keyword, convert it to polymer annotation, e.g. :items :items => "{{items}}"
       (if attr-ns
         (.writeAttribute writer attr-ns attr-name (str v))
         (.writeAttribute writer attr-name (str v))))))
 
+(declare serialize)
+
 ; Represents a node of an XML tree
-(defrecord Element [tag attrs content])
+(defrecord Element [tag attrs content]
+  java.lang.Object
+  (toString [x]
+    (do (print "Element toString: " x "\n")
+        (let [sw (java.io.StringWriter.)]
+          (serialize x)))))
+
 (defrecord CData [content])
 (defrecord Comment [content])
+
+(defn pprint
+  [html]
+  ;; (println "HTML: " html)
+  (let [factory (TransformerFactory/newInstance)
+        transformer (.newTransformer factory)
+        html (if (string? html) html
+                 ;; (if Element
+                 (serialize html))]
+    (.setOutputProperty transformer OutputKeys/INDENT "yes")
+    (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
+    (if (.startsWith html "<?xml")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
+    ;; (.setOutputProperty transformer OutputKeys/DOCTYPE_PUBLIC "")
+    ;; (.setOutputProperty transformer OutputKeys/DOCTYPE_SYSTEM "foo")
+    ;; (.setOutputProperty transformer OutputKeys/METHOD "html")
+    (let [dom-factory (DocumentBuilderFactory/newInstance)
+          builder (.newDocumentBuilder dom-factory)
+          is (ByteArrayInputStream. (.getBytes html))
+          doc (.parse builder is)
+          domsrc (DOMSource. doc)
+          xmlOutput (StreamResult. (StringWriter.))
+          os (.getWriter xmlOutput)
+          doctype (.getDoctype doc)]
+      (if doctype
+        (do
+          (.write os "<!DOCTYPE html>\n")))
+      (.transform transformer domsrc xmlOutput)
+      (println (.toString (.getWriter xmlOutput))))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   (let [[nspace qname] (qualified-name (:name event))]
@@ -62,13 +106,21 @@
           (.writeCData writer (subs cdata-str 0 (+ idx 2)))
           (recur (subs cdata-str (+ idx 2)) writer))))))
 
-(defn emit-event [event ^javax.xml.stream.XMLStreamWriter writer]
+(defn emit-event [event
+                  ^javax.xml.stream.XMLStreamWriter stream-writer
+                  ^java.io.Writer writer]
   (case (:type event)
-    :start-element (emit-start-tag event writer)
-    :end-element (.writeEndElement writer)
-    :chars (.writeCharacters writer (:str event))
-    :cdata (emit-cdata (:str event) writer)
-    :comment (.writeComment writer (:str event))))
+    :start-element (emit-start-tag event stream-writer)
+    :end-element (.writeEndElement stream-writer)
+    :chars #_(if (:disable-escaping opts)
+             (do ;; to prevent escaping of elts embedded in (str ...) constructs:
+               (.writeCharacters stream-writer "") ; switches mode?
+               (.write writer (:str event)))       ; writes without escaping < & etc.
+             )
+    (.writeCharacters stream-writer (:str event))
+    :kw (.writeCharacters stream-writer (:str event))
+    :cdata (emit-cdata (:str event) stream-writer)
+    :comment (.writeComment stream-writer (:str event))))
 
 (defprotocol EventGeneration
   "Protocol for generating new events based on element type"
@@ -97,6 +149,17 @@
     (if-let [r (seq (rest coll))]
       (cons (next-events (first coll) r) next-items)
       (next-events (first coll) next-items)))
+
+  clojure.lang.Keyword
+  (gen-event [kw]
+    (let [nm (name kw)
+          ns (namespace kw)]
+    (Event. :kw nil nil
+            (if (.endsWith nm "%")
+              (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
+              (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
+  (next-events [_ next-items]
+    next-items)
 
   String
   (gen-event [s]
@@ -370,25 +433,50 @@
 (defn emit
   "Prints the given Element tree as XML text to stream.
    Options:
-    :encoding <str>          Character encoding to use"
-  [e ^java.io.Writer stream & {:as opts}]
-  (let [^javax.xml.stream.XMLStreamWriter writer (-> (javax.xml.stream.XMLOutputFactory/newInstance)
-                                                     (.createXMLStreamWriter stream))]
+    :encoding <str>          Character encoding to use
+    :with-xml-declaration <bool>, default false"
+  [e ^java.io.Writer writer & {:as opts}]
+  (let [^javax.xml.stream.XMLStreamWriter stream-writer
+        (-> (javax.xml.stream.XMLOutputFactory/newInstance)
+            (.createXMLStreamWriter writer))]
 
-    (when (instance? java.io.OutputStreamWriter stream)
-      (check-stream-encoding stream (or (:encoding opts) "UTF-8")))
+    (when (instance? java.io.OutputStreamWriter writer)
+      (check-stream-encoding writer (or (:encoding opts) "UTF-8")))
 
-    (.writeStartDocument writer (or (:encoding opts) "UTF-8") "1.0")
+    (if (:html opts)
+      (.writeDTD stream-writer "<!DOCTYPE html>"))
+    (if (:with-xml-declaration opts)
+      (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
+    ;; (println "flattening: " e)
     (doseq [event (flatten-elements [e])]
-      (emit-event event writer))
-    (.writeEndDocument writer)
-    stream))
+      (do #_(prn "event: " event)
+      (emit-event event stream-writer writer)))
+    (.writeEndDocument stream-writer)
+    writer))
 
 (defn emit-str
-  "Emits the Element to String and returns it"
-  [e]
+  "Emits the Element to String and returns it.
+   Options:
+    :encoding <str>          Character encoding to use
+    :with-xml-declaration <bool>, default false"
+  [e & opts]
   (let [^java.io.StringWriter sw (java.io.StringWriter.)]
-    (emit e sw)
+    (apply emit e sw opts)
+    (.toString sw)))
+
+(defn serialize
+  "Serializes the Element to String and returns it.
+   Options:
+    :encoding <str>          Character encoding to use
+    :with-xml-declaration <bool>, default false"
+  [& args]
+  ;; (prn "serializing: " args)
+  (let [^java.io.StringWriter sw (java.io.StringWriter.)]
+    (if (= :html (first args))
+      (emit (rest args) sw :html true :with-xml-declaration false)
+      (if (= :with-xml-declaration (first args))
+        (emit (rest args) sw :with-xml-declaration true)
+        (emit args sw :with-xml-declaration false)))
     (.toString sw)))
 
 (defn ^javax.xml.transform.Transformer indenting-transformer []
