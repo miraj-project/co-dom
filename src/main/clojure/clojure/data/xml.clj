@@ -77,7 +77,8 @@
     (let [dom-factory (DocumentBuilderFactory/newInstance)
           builder (.newDocumentBuilder dom-factory)
           is (ByteArrayInputStream. (.getBytes html))
-          doc (.parse builder is)
+          doc (try (.parse builder is)
+                   (catch Exception e (prn (str "CAUGHT " (.getMessage e)))))
           domsrc (DOMSource. doc)
           xmlOutput (StreamResult. (StringWriter.))
           os (.getWriter xmlOutput)
@@ -92,6 +93,20 @@
   (let [[nspace qname] (qualified-name (:name event))]
     (.writeStartElement writer "" qname (or nspace ""))
     (write-attributes (:attrs event) writer)))
+
+(defn emit-void-tag [event ^javax.xml.stream.XMLStreamWriter writer]
+  (let [[nspace qname] (qualified-name (:name event))]
+    (.writeStartElement writer "" qname (or nspace ""))
+    (write-attributes (:attrs event) writer)
+    (.writeCharacters writer "") ;; forces close of start tag
+    ))
+
+(defn emit-end-tag [event
+                    ^javax.xml.stream.XMLStreamWriter stream-writer
+                    ^java.io.Writer writer]
+  #_(println "EMIT-END-TAG: " (:name event))
+  ;;(.writeEndElement writer)
+  (.write writer (str "</" (name (:name event)) ">")))
 
 (defn str-empty? [s]
   (or (nil? s)
@@ -111,7 +126,12 @@
                   ^java.io.Writer writer]
   (case (:type event)
     :start-element (emit-start-tag event stream-writer)
-    :end-element (.writeEndElement stream-writer)
+    :end-element (do
+                   #_(println "END ELT")
+                   (emit-end-tag event stream-writer writer))
+    :void-element (do
+                    #_(println "VOID ELT")
+                    (emit-start-tag event stream-writer))
     :chars #_(if (:disable-escaping opts)
              (do ;; to prevent escaping of elts embedded in (str ...) constructs:
                (.writeCharacters stream-writer "") ; switches mode?
@@ -119,6 +139,7 @@
              )
     (.writeCharacters stream-writer (:str event))
     :kw (.writeCharacters stream-writer (:str event))
+    :symbol (.writeCharacters stream-writer (:str event))
     :cdata (emit-cdata (:str event) stream-writer)
     :comment (.writeComment stream-writer (:str event))))
 
@@ -133,10 +154,16 @@
 (extend-protocol EventGeneration
   Element
   (gen-event [element]
-    (Event. :start-element (:tag element) (:attrs element) nil))
+    (if (= (:tag element) :link)
+      (Event. :start-element (:tag element) (:attrs element) nil)
+      (Event. :start-element (:tag element) (:attrs element) nil)))
   (next-events [element next-items]
-    (cons (:content element)
-          (cons (Event. :end-element (:tag element) nil nil) next-items)))
+    (do #_(println "NEXT evt: " (:tag element))
+        ;(if (= (:tag element) :link)
+         ; next-items
+          (cons (:content element)
+                (cons (Event. :end-element (:tag element) nil nil) next-items))))
+
   Event
   (gen-event [event] event)
   (next-events [_ next-items]
@@ -160,6 +187,17 @@
               (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
   (next-events [_ next-items]
     next-items)
+
+  ;; clojure.lang.Symbol
+  ;; (gen-event [kw]
+  ;;   (let [nm (name kw)
+  ;;         ns (namespace kw)]
+  ;;   (Event. :kw nil nil
+  ;;           (if (.endsWith nm "%")
+  ;;             (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
+  ;;             (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
+  ;; (next-events [_ next-items]
+  ;;   next-items)
 
   String
   (gen-event [s]
@@ -198,6 +236,8 @@
     next-items))
 
 (defn flatten-elements [elements]
+  ;; (prn "flatten-elements:")
+  ;; (prn elements)
   (when (seq elements)
     (lazy-seq
      (let [e (first elements)]
@@ -450,8 +490,8 @@
     ;; (println "flattening: " e)
     (doseq [event (flatten-elements [e])]
       (do #_(prn "event: " event)
-      (emit-event event stream-writer writer)))
-    (.writeEndDocument stream-writer)
+          (emit-event event stream-writer writer)))
+    ;; (.writeEndDocument stream-writer)
     writer))
 
 (defn emit-str
