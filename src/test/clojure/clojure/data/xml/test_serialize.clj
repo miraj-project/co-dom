@@ -26,8 +26,8 @@
     (h/li (h/span "bar2") (h/span "baz2"))
     )))))
 
-(xml/pprint
- (xml/serialize
+(xml/pprint :html
+ (xml/serialize :html
   ;; <link rel="import" href="../../polymer/polymer/polymer.html">
  (let [forms (co-type my-widget
                          "docstring"

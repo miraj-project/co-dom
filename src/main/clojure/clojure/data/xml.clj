@@ -217,33 +217,23 @@ www.artlogic.com
               (throw (Exception. "only :html and :xml supported"))
               fmt))
         fmt (if (keyword? fmt) fmt :xml)
-        ml (if (string? s) s
-               (serialize s))
-        ;; log (println "ML: " ml)
-        ;; see http://www.ling.helsinki.fi/kit/2004k/ctl257/JavaXSLT/Ch05.html
-        ;; xml-string (StringReader. ml)
+        ml (if (string? s) s (serialize s))
         xmlSource (StreamSource.  (StringReader. ml))
-
-        ;; xslt-string (StringReader. identity-transform)
-        ;; xsltSource (StreamSource. (StringReader. identity-transform))
-
-        xmlOutput (StreamResult. (StringWriter.))
-
+        xmlOutput (StreamResult.
+                   (let [sw (StringWriter.)]
+                     (if (.startsWith ml "<!DOCTYPE")
+                       (.write sw "<!DOCTYPE html>\n"))
+                     sw))
         factory (TransformerFactory/newInstance)
         transformer (if (= :html fmt)
-                      (.newTransformer factory
-                                       (StreamSource. (StringReader. identity-transform)))
+                      (.newTransformer factory (StreamSource. (StringReader. identity-transform)))
                       (.newTransformer factory))]
-
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
 
-    ;; (if doctype
-    ;;   (do
-    ;;     (.write os "<!DOCTYPE html>\n")))
     (.transform transformer xmlSource xmlOutput)
     (println (if (= :html fmt)
                (str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
