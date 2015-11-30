@@ -15,7 +15,7 @@
                  ;; [ clj-logging-config "1.9.7"]
                  ]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
-                   :source-paths ["src/clj" "src/test" "dev"]
+                   :source-paths ["src/main/clojure" "src/test/clojure" "dev"]
                    ;; :dependencies [[net.sf.jtidy/jtidy "r938"]
                    ;;                [ring "1.4.0"]]
                     }}
