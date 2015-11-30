@@ -58,36 +58,196 @@
 (defrecord CData [content])
 (defrecord Comment [content])
 
+;;FIXME: support fragments
+
+ ;; private static final String IDENTITY_XSLT =
+ ;;    "<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
+ ;;    + " version='1.0'>"
+ ;;    + "<xsl:template match='/'><xsl:copy-of select='.'/>"
+ ;;    + "</xsl:template></xsl:stylesheet>";
+(def identity-transform
+   ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
+  (str
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:strip-space elements='*' />"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='@*|node()'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "<xsl:template match=\"*[.='']\">"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+       "VOID"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "</xsl:stylesheet>"))
+
+(def indent-transform
+;; http://www.xml.com/pub/a/2006/11/29/xslt-xml-pretty-printer.html?page=3#finalCode
+(str
+ "<?xml version='1.0' encoding='UTF-8'?>
+<!--
+Converts XML into a nice readable format.
+Tested with Saxon 6.5.3.
+As a test, this stylesheet should not change when run on itself.
+But note that there are no guarantees about attribute order within an
+element (see http://www.w3.org/TR/xpath#dt-document-order), or about
+which characters are escaped (see
+http://www.w3.org/TR/xslt#disable-output-escaping).
+I did not test processing instructions, CDATA sections, or
+namespaces.
+
+Hew Wolff
+Senior Engineer
+Art & Logic, Inc.
+www.artlogic.com
+-->
+
+<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform' version='1.0'>
+   <!-- Take control of the whitespace. -->
+
+   <xsl:output method='html' indent='no' encoding='UTF-8'/>
+   <xsl:strip-space elements='*'/>
+   <xsl:preserve-space elements='xsl:text'/>
+
+   <!-- Copy comments, and elements recursively. -->
+
+   <xsl:template match='@*|node()'> <!-- match='*|comment()'> -->
+      <xsl:param name='depth'>0</xsl:param>
+
+      <!--
+      Set off from the element above if one of the two has children.
+      Also, set off a comment from an element.
+      And set off from the XML declaration if necessary.
+      -->
+
+      <xsl:variable name='isFirstNode' select='count(../..) = 0 and position() = 1'/>
+      <xsl:variable name='previous' select='preceding-sibling::node()[1]'/>
+      <xsl:variable name='adjacentComplexElement' select='count($previous/*) &gt; 0 or count(*) &gt; 0'/>
+      <xsl:variable name='adjacentDifferentType' select='not(($previous/self::comment() and self::comment()) or ($previous/self::* and self::*))'/>
+
+      <xsl:if test='$isFirstNode or ($previous and ($adjacentComplexElement or $adjacentDifferentType))'>
+         <xsl:text>&#xA;</xsl:text>
+      </xsl:if>
+
+      <!-- Start a new line. -->
+
+      <xsl:text>&#xA;</xsl:text>
+
+      <xsl:call-template name='indent'>
+         <xsl:with-param name='depth' select='$depth'/>
+      </xsl:call-template>
+
+      <xsl:copy>
+         <xsl:if test='self::*'>
+            <xsl:copy-of select='@*'/>
+
+            <xsl:apply-templates>
+               <xsl:with-param name='depth' select='$depth + 1'/>
+            </xsl:apply-templates>
+
+            <xsl:if test='count(*) &gt; 0'>
+               <xsl:text>&#xA;</xsl:text>
+
+               <xsl:call-template name='indent'>
+                  <xsl:with-param name='depth' select='$depth'/>
+               </xsl:call-template>
+            </xsl:if>
+         </xsl:if>
+      </xsl:copy>
+
+      <xsl:variable name='isLastNode' select='count(../..) = 0 and position() = last()'/>
+
+      <xsl:if test='$isLastNode'>
+         <xsl:text>&#xA;</xsl:text>
+      </xsl:if>
+   </xsl:template>
+
+   <xsl:template name='indent'>
+      <xsl:param name='depth'/>
+
+      <xsl:if test='$depth &gt; 0'>
+         <xsl:text>   </xsl:text>
+
+         <xsl:call-template name='indent'>
+            <xsl:with-param name='depth' select='$depth - 1'/>
+         </xsl:call-template>
+      </xsl:if>
+   </xsl:template>
+
+   <!-- Escape newlines within text nodes, for readability. -->
+
+   <xsl:template match='text()'>
+      <xsl:call-template name='escapeNewlines'>
+         <xsl:with-param name='text'>
+            <xsl:value-of select='.'/>
+         </xsl:with-param>
+      </xsl:call-template>
+   </xsl:template>
+
+   <xsl:template name='escapeNewlines'>
+      <xsl:param name='text'/>
+
+      <xsl:if test='string-length($text) &gt; 0'>
+         <xsl:choose>
+            <xsl:when test='substring($text, 1, 1) = \"&#xA;\"'>
+               <xsl:text disable-output-escaping='yes'>&amp;#xA;</xsl:text>
+            </xsl:when>
+
+            <xsl:otherwise>
+               <xsl:value-of select='substring($text, 1, 1)'/>
+            </xsl:otherwise>
+         </xsl:choose>
+
+         <xsl:call-template name='escapeNewlines'>
+            <xsl:with-param name='text' select='substring($text, 2)'/>
+         </xsl:call-template>
+      </xsl:if>
+   </xsl:template>
+</xsl:stylesheet>"))
+
 (defn pprint
-  [html]
-  ;; (println "HTML: " html)
-  (let [factory (TransformerFactory/newInstance)
-        transformer (.newTransformer factory)
-        html (if (string? html) html
-                 ;; (if Element
-                 (serialize html))]
+  [fmt & ml]
+  (let [s (if (or (= :html fmt) (= :xml fmt))
+            (first ml)
+            (if (keyword? fmt)
+              (throw (Exception. "only :html and :xml supported"))
+              fmt))
+        fmt (if (keyword? fmt) fmt :xml)
+        ml (if (string? s) s
+               (serialize s))
+        ;; log (println "ML: " ml)
+        ;; see http://www.ling.helsinki.fi/kit/2004k/ctl257/JavaXSLT/Ch05.html
+        ;; xml-string (StringReader. ml)
+        xmlSource (StreamSource.  (StringReader. ml))
+
+        ;; xslt-string (StringReader. identity-transform)
+        ;; xsltSource (StreamSource. (StringReader. identity-transform))
+
+        xmlOutput (StreamResult. (StringWriter.))
+
+        factory (TransformerFactory/newInstance)
+        transformer (if (= :html fmt)
+                      (.newTransformer factory
+                                       (StreamSource. (StringReader. identity-transform)))
+                      (.newTransformer factory))]
+
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
-    (if (.startsWith html "<?xml")
+    (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
-    ;; (.setOutputProperty transformer OutputKeys/DOCTYPE_PUBLIC "")
-    ;; (.setOutputProperty transformer OutputKeys/DOCTYPE_SYSTEM "foo")
-    ;; (.setOutputProperty transformer OutputKeys/METHOD "html")
-    (let [dom-factory (DocumentBuilderFactory/newInstance)
-          builder (.newDocumentBuilder dom-factory)
-          is (ByteArrayInputStream. (.getBytes html))
-          doc (try (.parse builder is)
-                   (catch Exception e (prn (str "CAUGHT " (.getMessage e)))))
-          domsrc (DOMSource. doc)
-          xmlOutput (StreamResult. (StringWriter.))
-          os (.getWriter xmlOutput)
-          doctype (.getDoctype doc)]
-      (if doctype
-        (do
-          (.write os "<!DOCTYPE html>\n")))
-      (.transform transformer domsrc xmlOutput)
-      (println (.toString (.getWriter xmlOutput))))))
+
+    ;; (if doctype
+    ;;   (do
+    ;;     (.write os "<!DOCTYPE html>\n")))
+    (.transform transformer xmlSource xmlOutput)
+    (println (if (= :html fmt)
+               (str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
+               (.toString (.getWriter xmlOutput))))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   (let [[nspace qname] (qualified-name (:name event))]
