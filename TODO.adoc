@@ -1,0 +1,18 @@
+
+Generalization: make it a lib for structured text, not just xml.
+E.g. so it supports HTML5 and possibly other markup/down languages.
+
+* fix tests
+
+* change name to data.doc or similar, so elements are
+  #clojure.data.doc.Element rather than #clojure.data.xml.Element
+
+* change 'emit' to 'serialize'
+
+* parameterize 'parse' etc. with grammar tag, e.g. :xml, :html (HTML5), :xhtml, etc.
+
+* dynamically load required libs, e.g.
+** jsoup for html
+** link:https://code.google.com/p/markdown4j/[markdown4j]
+** etc.
+

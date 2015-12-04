@@ -10,7 +10,8 @@
   emit these as text."
   :author "Chris Houser"}
   clojure.data.xml
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
                              XMLStreamReader
@@ -21,6 +22,11 @@
            [javax.xml.transform.stream StreamSource StreamResult]
            (java.nio.charset Charset)
            (java.io Reader)))
+
+;;FIXME:  support comment nodes
+
+(defonce mode (atom nil))
+(defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
 
 ; Represents a parse event.
 ; type is one of :start-element, :end-element, or :characters
@@ -39,11 +45,20 @@
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    (let [[attr-ns attr-name] (qualified-name k)]
-      ;; if v is keyword, convert it to polymer annotation, e.g. :items :items => "{{items}}"
+    ;; (log/trace "ATTR: " k " = " v " " (type v))
+    (let [[attr-ns attr-name] (qualified-name k)
+          ;; Polymer annotation: sym=one-way, kw=two-way
+          ;; e.g.  {:items 'employees} => items="[[employees]]"
+          ;; e.g.  {:items :employees} => items="{{employees}}"
+          attr-val (cond
+                     (keyword? v) (str "{{" (subs (str v) 1) "}}")
+                     (symbol? v) (str "[[" (str v) "]]")
+                     (= (subs (str k) 1) (str v)) miraj-boolean-tag
+                     (empty? v) miraj-boolean-tag
+                     :else v)]
       (if attr-ns
-        (.writeAttribute writer attr-ns attr-name (str v))
-        (.writeAttribute writer attr-name (str v))))))
+        (.writeAttribute writer attr-ns attr-name attr-val)
+        (.writeAttribute writer attr-name attr-val)))))
 
 (declare serialize)
 
@@ -51,7 +66,7 @@
 (defrecord Element [tag attrs content]
   java.lang.Object
   (toString [x]
-    (do (print "Element toString: " x "\n")
+    (do ;;(print "Element toString: " x "\n")
         (let [sw (java.io.StringWriter.)]
           (serialize x)))))
 
@@ -60,12 +75,86 @@
 
 ;;FIXME: support fragments
 
- ;; private static final String IDENTITY_XSLT =
- ;;    "<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
- ;;    + " version='1.0'>"
- ;;    + "<xsl:template match='/'><xsl:copy-of select='.'/>"
- ;;    + "</xsl:template></xsl:stylesheet>";
-(def identity-transform
+;; HTML ELEMENTS
+
+;; void != empty
+;; html void elements  = xml elements with "nothing" content model
+;; html voids:  http://www.w3.org/html/wg/drafts/html/master/syntax.html#void-elements
+;; xml nothings: http://www.w3.org/html/wg/drafts/html/master/dom.html#concept-content-nothing
+
+;; "Void elements only have a start tag; end tags must not be specified for void elements."
+;; start tags: http://www.w3.org/html/wg/drafts/html/master/syntax.html#start-tags
+;; "if the element is one of the void elements, or if the element is a
+;; foreign element, then there may be a single U+002F SOLIDUS
+;; character (/). This character has no effect on void elements, but
+;; on foreign elements it marks the start tag as self-closing."
+
+;; The critical point: voids with "/>" are NOT deemed self-closing;
+;; the "/" is devoid of meaning, so to speak.  So "<link/>" is not a
+;; self-closing tag, it's a start tag with an optional "/".  But
+;; foreign tags may self-close, and we can infer that "normal" tags
+;; must not self-close.
+
+;; In other words, HTML5 syntax and semantics are not uniform across
+;; all elements.
+
+(def html5-void-elt-tags
+  #{"area" "base" "br" "col"
+   "embed" "hr" "img" "input"
+   "keygen" "link" "meta" "param"
+   "source" "track" "wbr"})
+
+(def identity-transform-html
+   ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
+  (str
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:strip-space elements='*' />"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='node()'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "<xsl:template match='html'>"
+     "<xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html&gt;&#xA;</xsl:text>"
+     "&#xA;"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "<xsl:template match=\"" (str/join "|" html5-void-elt-tags) "\">"  ;;*[.='']\">"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+       "VOID"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "<xsl:template match=\"@*\">"
+   ;; Handle HTML boolean attributes
+     "<xsl:choose>"
+       "<xsl:when test='name() = .'>"
+         "<xsl:attribute name='{name()}'>"
+           miraj-boolean-tag
+         "</xsl:attribute>"
+       "</xsl:when>"
+       "<xsl:when test='. = concat(\":\", name())'>"
+         "<xsl:attribute name='{name()}'>"
+           miraj-boolean-tag
+         "</xsl:attribute>"
+       "</xsl:when>"
+       "<xsl:when test='. = \"\"'>"
+         "<xsl:attribute name='{name()}'>"
+           miraj-boolean-tag
+         "</xsl:attribute>"
+       "</xsl:when>"
+       "<xsl:otherwise>"
+         "<xsl:copy/>"
+       "</xsl:otherwise>"
+     "</xsl:choose>"
+   "</xsl:template>"
+   "</xsl:stylesheet>"))
+
+(def identity-transform-xml
    ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
   (str
    "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
@@ -77,147 +166,31 @@
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
-   "<xsl:template match=\"*[.='']\">"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-       "VOID"
-     "</xsl:copy>"
-   "</xsl:template>"
    "</xsl:stylesheet>"))
 
-(def indent-transform
-;; http://www.xml.com/pub/a/2006/11/29/xslt-xml-pretty-printer.html?page=3#finalCode
-(str
- "<?xml version='1.0' encoding='UTF-8'?>
-<!--
-Converts XML into a nice readable format.
-Tested with Saxon 6.5.3.
-As a test, this stylesheet should not change when run on itself.
-But note that there are no guarantees about attribute order within an
-element (see http://www.w3.org/TR/xpath#dt-document-order), or about
-which characters are escaped (see
-http://www.w3.org/TR/xslt#disable-output-escaping).
-I did not test processing instructions, CDATA sections, or
-namespaces.
-
-Hew Wolff
-Senior Engineer
-Art & Logic, Inc.
-www.artlogic.com
--->
-
-<xsl:stylesheet xmlns:xsl='http://www.w3.org/1999/XSL/Transform' version='1.0'>
-   <!-- Take control of the whitespace. -->
-
-   <xsl:output method='html' indent='no' encoding='UTF-8'/>
-   <xsl:strip-space elements='*'/>
-   <xsl:preserve-space elements='xsl:text'/>
-
-   <!-- Copy comments, and elements recursively. -->
-
-   <xsl:template match='@*|node()'> <!-- match='*|comment()'> -->
-      <xsl:param name='depth'>0</xsl:param>
-
-      <!--
-      Set off from the element above if one of the two has children.
-      Also, set off a comment from an element.
-      And set off from the XML declaration if necessary.
-      -->
-
-      <xsl:variable name='isFirstNode' select='count(../..) = 0 and position() = 1'/>
-      <xsl:variable name='previous' select='preceding-sibling::node()[1]'/>
-      <xsl:variable name='adjacentComplexElement' select='count($previous/*) &gt; 0 or count(*) &gt; 0'/>
-      <xsl:variable name='adjacentDifferentType' select='not(($previous/self::comment() and self::comment()) or ($previous/self::* and self::*))'/>
-
-      <xsl:if test='$isFirstNode or ($previous and ($adjacentComplexElement or $adjacentDifferentType))'>
-         <xsl:text>&#xA;</xsl:text>
-      </xsl:if>
-
-      <!-- Start a new line. -->
-
-      <xsl:text>&#xA;</xsl:text>
-
-      <xsl:call-template name='indent'>
-         <xsl:with-param name='depth' select='$depth'/>
-      </xsl:call-template>
-
-      <xsl:copy>
-         <xsl:if test='self::*'>
-            <xsl:copy-of select='@*'/>
-
-            <xsl:apply-templates>
-               <xsl:with-param name='depth' select='$depth + 1'/>
-            </xsl:apply-templates>
-
-            <xsl:if test='count(*) &gt; 0'>
-               <xsl:text>&#xA;</xsl:text>
-
-               <xsl:call-template name='indent'>
-                  <xsl:with-param name='depth' select='$depth'/>
-               </xsl:call-template>
-            </xsl:if>
-         </xsl:if>
-      </xsl:copy>
-
-      <xsl:variable name='isLastNode' select='count(../..) = 0 and position() = last()'/>
-
-      <xsl:if test='$isLastNode'>
-         <xsl:text>&#xA;</xsl:text>
-      </xsl:if>
-   </xsl:template>
-
-   <xsl:template name='indent'>
-      <xsl:param name='depth'/>
-
-      <xsl:if test='$depth &gt; 0'>
-         <xsl:text>   </xsl:text>
-
-         <xsl:call-template name='indent'>
-            <xsl:with-param name='depth' select='$depth - 1'/>
-         </xsl:call-template>
-      </xsl:if>
-   </xsl:template>
-
-   <!-- Escape newlines within text nodes, for readability. -->
-
-   <xsl:template match='text()'>
-      <xsl:call-template name='escapeNewlines'>
-         <xsl:with-param name='text'>
-            <xsl:value-of select='.'/>
-         </xsl:with-param>
-      </xsl:call-template>
-   </xsl:template>
-
-   <xsl:template name='escapeNewlines'>
-      <xsl:param name='text'/>
-
-      <xsl:if test='string-length($text) &gt; 0'>
-         <xsl:choose>
-            <xsl:when test='substring($text, 1, 1) = \"&#xA;\"'>
-               <xsl:text disable-output-escaping='yes'>&amp;#xA;</xsl:text>
-            </xsl:when>
-
-            <xsl:otherwise>
-               <xsl:value-of select='substring($text, 1, 1)'/>
-            </xsl:otherwise>
-         </xsl:choose>
-
-         <xsl:call-template name='escapeNewlines'>
-            <xsl:with-param name='text' select='substring($text, 2)'/>
-         </xsl:call-template>
-      </xsl:if>
-   </xsl:template>
-</xsl:stylesheet>"))
-
+;;FIXME: support non-tree input
+;;FIXME: support :xhtml option
 (defn pprint
-  [fmt & ml]
-  (let [s (if (or (= :html fmt) (= :xml fmt))
-            (first ml)
-            (if (keyword? fmt)
+  [& elts]
+  (log/trace "PPRINT elts: " elts)
+  (let [s (if (or (= :html (first elts))
+                  (= :xml (first elts)))
+            (do (log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
+                (rest elts))
+            (if (keyword? (first elts))
               (throw (Exception. "only :html and :xml supported"))
-              fmt))
-        fmt (if (keyword? fmt) fmt :xml)
-        ml (if (string? s) s (serialize s))
+              elts))
+        fmt (if (keyword? (first elts)) (first elts) :xml)
+        void (reset! mode fmt)
+        log (log/trace "mode: " @mode)
+        ;; always serialize to xml, deal with html issues in the transform
+        ml (if (string? s)
+             (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))
+             (if (> (count s) 1)
+               (throw (Exception. "forest input not yet supported for pprint"))
+               (let [s (serialize :xml s)]
+                 (reset! mode fmt)
+                 s)))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -225,9 +198,14 @@ www.artlogic.com
                        (.write sw "<!DOCTYPE html>\n"))
                      sw))
         factory (TransformerFactory/newInstance)
-        transformer (if (= :html fmt)
-                      (.newTransformer factory (StreamSource. (StringReader. identity-transform)))
-                      (.newTransformer factory))]
+        transformer (if (= :html @mode)
+                      (do
+                        ;;(log/trace "transforming with identity-transform-html: " identity-transform-html)
+                      (.newTransformer factory (StreamSource. (StringReader. identity-transform-html))))
+                      (do
+                        ;;(log/trace "transforming with identity-transform-xml")
+                      (.newTransformer factory (StreamSource. (StringReader. identity-transform-xml)))))]
+;;                      (.newTransformer factory))]
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
@@ -236,7 +214,15 @@ www.artlogic.com
 
     (.transform transformer xmlSource xmlOutput)
     (println (if (= :html fmt)
-               (str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
+               ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
+               (let [string-writer (.getWriter xmlOutput)
+                     s (.toString string-writer)
+                     void (.flush string-writer)
+                     s (str/replace s #"VOID<[^>]+>" "")
+                     regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
+                 ;; boolean attribs: value must be "" or must match attrib name
+                 ;;FIXME: make this more robust
+                 (str/replace s regx ""))
                (.toString (.getWriter xmlOutput))))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
@@ -254,9 +240,14 @@ www.artlogic.com
 (defn emit-end-tag [event
                     ^javax.xml.stream.XMLStreamWriter stream-writer
                     ^java.io.Writer writer]
-  #_(println "EMIT-END-TAG: " (:name event))
-  ;;(.writeEndElement writer)
-  (.write writer (str "</" (name (:name event)) ">")))
+  (let [t (name (:name event))]
+    ;; (println "EMIT-END-TAG: " t (type t))
+    ;;(.writeEndElement writer)
+    (.write writer (str
+                    (if (= @mode :html)
+                      (if (contains? html5-void-elt-tags t)
+                        "VOID"))
+                    "</" t ">"))))
 
 (defn str-empty? [s]
   (or (nil? s)
@@ -279,9 +270,9 @@ www.artlogic.com
     :end-element (do
                    #_(println "END ELT")
                    (emit-end-tag event stream-writer writer))
-    :void-element (do
-                    #_(println "VOID ELT")
-                    (emit-start-tag event stream-writer))
+    ;; :void-element (do
+    ;;                 #_(println "VOID ELT")
+    ;;                 (emit-start-tag event stream-writer))
     :chars #_(if (:disable-escaping opts)
              (do ;; to prevent escaping of elts embedded in (str ...) constructs:
                (.writeCharacters stream-writer "") ; switches mode?
@@ -289,7 +280,7 @@ www.artlogic.com
              )
     (.writeCharacters stream-writer (:str event))
     :kw (.writeCharacters stream-writer (:str event))
-    :symbol (.writeCharacters stream-writer (:str event))
+    :sym (.writeCharacters stream-writer (:str event))
     :cdata (emit-cdata (:str event) stream-writer)
     :comment (.writeComment stream-writer (:str event))))
 
@@ -304,9 +295,9 @@ www.artlogic.com
 (extend-protocol EventGeneration
   Element
   (gen-event [element]
-    (if (= (:tag element) :link)
-      (Event. :start-element (:tag element) (:attrs element) nil)
-      (Event. :start-element (:tag element) (:attrs element) nil)))
+    ;; (if (= (:tag element) :link)
+    ;;   (Event. :void-element (:tag element) (:attrs element) nil)
+      (Event. :start-element (:tag element) (:attrs element) nil)) ;)
   (next-events [element next-items]
     (do #_(println "NEXT evt: " (:tag element))
         ;(if (= (:tag element) :link)
@@ -332,22 +323,22 @@ www.artlogic.com
     (let [nm (name kw)
           ns (namespace kw)]
     (Event. :kw nil nil
-            (if (.endsWith nm "%")
-              (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
-              (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
+            ;; (if (.endsWith nm "%")
+            ;;   (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
+              (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]"))))
   (next-events [_ next-items]
     next-items)
 
-  ;; clojure.lang.Symbol
-  ;; (gen-event [kw]
-  ;;   (let [nm (name kw)
-  ;;         ns (namespace kw)]
-  ;;   (Event. :kw nil nil
-  ;;           (if (.endsWith nm "%")
-  ;;             (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
-  ;;             (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
-  ;; (next-events [_ next-items]
-  ;;   next-items)
+  clojure.lang.Symbol
+  (gen-event [sym]
+    (let [nm (name sym)
+          ns (namespace sym)]
+      (log/trace "gen-event Symbol: " sym)
+      (Event. :sym nil nil
+              (str "{{" ns (if ns ".") nm "}}"))))
+      ;;         (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
+  (next-events [_ next-items]
+    next-items)
 
   String
   (gen-event [s]
@@ -391,8 +382,9 @@ www.artlogic.com
   (when (seq elements)
     (lazy-seq
      (let [e (first elements)]
-       (cons (gen-event e)
-             (flatten-elements (next-events e (rest elements))))))))
+       (let [f (gen-event e)]
+       (cons f
+             (flatten-elements (next-events e (rest elements)))))))))
 
 (defn element [tag & [attrs & content]]
   (Element. tag (or attrs {}) (remove nil? content)))
@@ -447,8 +439,12 @@ www.artlogic.com
   (ffirst
    (seq-tree
     (fn [^Event event contents]
-      (when (= :start-element (.type event))
-        (Element. (.name event) (.attrs event) contents)))
+      (cond
+        (= :start-element (.type event))
+        (Element. (.name event) (.attrs event) contents)
+        ;; (= :void-element (.type event))
+        ;; (Element. (.name event) (.attrs event) contents))
+        ))
     (fn [^Event event] (= :end-element (.type event)))
     (fn [^Event event] (.str event))
     events)))
@@ -633,13 +629,12 @@ www.artlogic.com
     (when (instance? java.io.OutputStreamWriter writer)
       (check-stream-encoding writer (or (:encoding opts) "UTF-8")))
 
-    (if (:html opts)
+    (if (:doctype opts)
       (.writeDTD stream-writer "<!DOCTYPE html>"))
     (if (:with-xml-declaration opts)
       (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
-    ;; (println "flattening: " e)
     (doseq [event (flatten-elements [e])]
-      (do #_(prn "event: " event)
+      (do ;(log/trace "event: " event)
           (emit-event event stream-writer writer)))
     ;; (.writeEndDocument stream-writer)
     writer))
@@ -659,15 +654,41 @@ www.artlogic.com
    Options:
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
-  [& args]
-  ;; (prn "serializing: " args)
-  (let [^java.io.StringWriter sw (java.io.StringWriter.)]
-    (if (= :html (first args))
-      (emit (rest args) sw :html true :with-xml-declaration false)
-      (if (= :with-xml-declaration (first args))
-        (emit (rest args) sw :with-xml-declaration true)
-        (emit args sw :with-xml-declaration false)))
-    (.toString sw)))
+  ;; [& args]
+  [& elts]
+  ;; (log/trace "serialize: " elts)
+  (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
+               (rest elts)
+               (if (keyword? (first elts))
+                 (throw (Exception. "only :html and :xml supported"))
+                 elts))
+        fmt (if (keyword? (first elts)) (first elts) :xml)
+        ^java.io.StringWriter
+        string-writer (java.io.StringWriter.)]
+    (reset! mode fmt)
+    ;; (log/trace "serializing to" @mode ": " args)
+    (if (= :html (:tag (first args)))
+      (.write string-writer "<!DOCTYPE html>"))
+    ;; (log/trace "mode: " @mode)
+    (cond
+      (= @mode :html)
+      (do ;(log/trace "emitting HTML: " args)
+          (emit args string-writer :html true :with-xml-declaration false))
+      (= @mode :xml)
+      (do ;(log/trace "emiting XML")
+          (if (= :with-xml-declaration (first args))
+            (do ;(log/trace "emitting with xml decl: " args)
+                (emit (rest args) string-writer :with-xml-declaration true))
+            (do ;(log/trace "emitting w/o xml decl: " args)
+                (emit args string-writer :with-xml-declaration false))))
+      :else
+      (throw (Exception. "invalid mode: " @mode)))
+    (str (if (= @mode :html)
+           (let [s (str/replace (.toString string-writer) #"VOID<[^>]+>" "")
+                 regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
+                 (str/replace s regx ""))
+           (.toString string-writer)))))
+;; (.toString string-writer)))
 
 (defn ^javax.xml.transform.Transformer indenting-transformer []
   (doto (-> (javax.xml.transform.TransformerFactory/newInstance) .newTransformer)
