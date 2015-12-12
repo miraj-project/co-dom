@@ -8,8 +8,8 @@
 
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
-  clojure.data.xml.test-utils
-  (:require [clojure.data.xml :as xml]))
+  miraj.markup.test-utils
+  (:require [miraj.markup :as xml]))
 
 (defn test-stream [x]
   (java.io.ByteArrayInputStream. (.getBytes x "UTF-8")))

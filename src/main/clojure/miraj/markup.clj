@@ -9,7 +9,7 @@
 (ns ^{:doc "Functions to parse XML into lazy sequences and lazy trees and
   emit these as text."
   :author "Chris Houser"}
-  clojure.data.xml
+  miraj.markup
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]

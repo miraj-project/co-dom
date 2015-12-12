@@ -8,9 +8,9 @@
 
 (ns ^{:doc "Tests for seq-tree, building a lazy tree from lazy seq."
       :author "Chris Houser"}
-  clojure.data.xml.test-seq-tree
+  miraj.markup.test-seq-tree
   (:use clojure.test
-        clojure.data.xml)
+        miraj.markup)
   (:import (java.lang.ref WeakReference)))
 
 (def tt

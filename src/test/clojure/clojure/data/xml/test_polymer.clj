@@ -1,12 +1,12 @@
 (ns ^{:doc "Tests for polymer html functions"
       :author "Gregg Reynolds"}
-  clojure.data.xml.test-polymer
+  miraj.markup.test-polymer
   (:refer-clojure :exclude [map meta time])
   (:require ;;[miraj.core :refer :all]
             [miraj.html :as h :refer :all]
             [miraj.ml.polymer :as p :refer :all]
             ;; [hiccup.page :refer [html5]]
-            [clojure.data.xml :as xml]
+            [miraj.markup :as xml]
             [clojure.tools.logging :as log :only [trace debug error info]]
             [clojure.pprint :as pp]
             [clojure.string :as str]
@@ -14,35 +14,35 @@
             [clojure.tools.reader.edn :as edn]
             [clojure.tools.reader.reader-types :as readers]
             [clojure.test :refer :all]
-            [clojure.data.xml]
-            [clojure.data.xml.test-utils :refer [test-stream lazy-parse*]]))
+            [miraj.markup]
+            [miraj.markup.test-utils :refer [test-stream lazy-parse*]]))
 
 (deftest ^:polymer test-1
   (testing "test 1"
     (is (= (h/div)
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ()}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ()}))
     (is (= (h/div {})
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ()}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ()}))
     (is (= (h/div {:class "test"})
-           #clojure.data.xml.Element{:tag :div, :attrs {:class "test"}, :content ()}))
+           #miraj.markup.Element{:tag :div, :attrs {:class "test"}, :content ()}))
     (is (= (h/div "content")
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ("content")}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ("content")}))
     (is (= (h/div {} "content")
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ("content")}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ("content")}))
     (is (= (h/div {:class "test"} "content")
-           #clojure.data.xml.Element{:tag :div, :attrs {:class "test"}, :content ("content")}))
+           #miraj.markup.Element{:tag :div, :attrs {:class "test"}, :content ("content")}))
     (is (= (h/div (h/span))
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content (#clojure.data.xml.Element{:tag :span, :attrs {}, :content ()})}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content (#miraj.markup.Element{:tag :span, :attrs {}, :content ()})}))
     (is (= (h/div {} (h/span))
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content (#clojure.data.xml.Element{:tag :span, :attrs {}, :content ()})}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content (#miraj.markup.Element{:tag :span, :attrs {}, :content ()})}))
     (is (= (h/div {} (h/span {}))
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content (#clojure.data.xml.Element{:tag :span, :attrs {}, :content ()})}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content (#miraj.markup.Element{:tag :span, :attrs {}, :content ()})}))
     (is (= (h/div "hello" (h/span))
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ("hello" #clojure.data.xml.Element{:tag :span, :attrs {}, :content ()})}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ("hello" #miraj.markup.Element{:tag :span, :attrs {}, :content ()})}))
     (is (= (h/div "hello" (h/span "world"))
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ("hello" #clojure.data.xml.Element{:tag :span, :attrs {}, :content ("world")})}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ("hello" #miraj.markup.Element{:tag :span, :attrs {}, :content ("world")})}))
     (is (= (h/div "hello" (h/span "world") "goodbye")
-           #clojure.data.xml.Element{:tag :div, :attrs {}, :content ("hello" #clojure.data.xml.Element{:tag :span, :attrs {}, :content ("world")} "goodbye")}))
+           #miraj.markup.Element{:tag :div, :attrs {}, :content ("hello" #miraj.markup.Element{:tag :span, :attrs {}, :content ("world")} "goodbye")}))
     ))
 
 ;; VOID and EMPTY elements

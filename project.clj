@@ -1,9 +1,9 @@
-(defproject mobileink/data.xml "0.0.10-SNAPSHOT"
-  :description "data.xml fork"
+(defproject miraj/markup "0.1.0-SNAPSHOT"
+  :description "core.data.xml fork"
   :url "https://github.com/mobileink/data.xml"
   :source-paths ["src/main/clojure"]
-  :test-paths ["src/test/clojure"]
-  :dependencies [[org.clojure/clojure "1.7.0"]
+  ;; :test-paths ["src/test/clojure"]
+  :dependencies [[org.clojure/clojure "1.8.0-RC3"]
                  ;; [org.clojure/tools.namespace "0.2.11"]
                  ;; [hiccup "1.0.5"]
                  ;; [org.clojure/tools.logging "0.3.1"]

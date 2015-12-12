@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?><project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>mobileink</groupId>
-  <artifactId>data.xml</artifactId>
+  <groupId>miraj</groupId>
+  <artifactId>markup</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.10-SNAPSHOT</version>
-  <name>data.xml</name>
-  <description>data.xml fork</description>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>markup</name>
+  <description>core.data.xml fork</description>
   <url>https://github.com/mobileink/data.xml</url>
   <scm>
     <connection>scm:git:git://github.com//.git</connection>
     <developerConnection>scm:git:ssh://git@github.com//.git</developerConnection>
-    <tag>14d0af1cef8c8af497a2602dc710ef65967537b6
+    <tag>a0ecb2b1085aef64f263935cd9c049b7e16d4e3e
 </tag>
     <url>https://github.com//</url>
   </scm>
@@ -57,7 +57,7 @@
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojure</artifactId>
-      <version>1.7.0</version>
+      <version>1.8.0-RC3</version>
     </dependency>
   </dependencies>
 </project>

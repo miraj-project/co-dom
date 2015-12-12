@@ -8,10 +8,10 @@
 
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
-  clojure.data.xml.test-emit
+  miraj.markup.test-emit
   (:use clojure.test
-        clojure.data.xml
-        [clojure.data.xml.test-utils :only (test-stream lazy-parse*)]))
+        miraj.markup
+        [miraj.markup.test-utils :only (test-stream lazy-parse*)]))
 
 (def deep-tree
   (lazy-parse* (str "<a h=\"1\" i='2' j=\"3\">"

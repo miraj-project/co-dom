@@ -8,10 +8,10 @@
 
 (ns ^{:doc "Tests for XML parsing functions."
       :author "Chris Houser"}
-  clojure.data.xml.test-parse
+  miraj.markup.test-parse
   (:use clojure.test
-        clojure.data.xml
-        [clojure.data.xml.test-utils :only [test-stream lazy-parse*]]))
+        miraj.markup
+        [miraj.markup.test-utils :only [test-stream lazy-parse*]]))
 
 (deftest simple
   (let [input "<html><body bg=\"red\">This is <b>bold</b> test</body></html>"

@@ -1,10 +1,10 @@
 (ns ^{:doc "Tests for serialization"
       :author "Gregg Reynolds"}
-  clojure.data.xml.test-serialize
+  miraj.markup.test-serialize
   (:require [miraj.core :refer :all]
             [miraj.html :as h :refer :all]
             [miraj.ml.polymer :as p :refer :all]
-            [clojure.data.xml :as xml]
+            [miraj.markup :as xml]
             [clojure.tools.logging :as log :only [trace debug error info]]
             [clojure.pprint :as pp]
             [clojure.string :as string]
@@ -12,8 +12,8 @@
             [clojure.tools.reader.edn :as edn]
             [clojure.tools.reader.reader-types :as readers]
             [clojure.test]
-            [clojure.data.xml]
-            [clojure.data.xml.test-utils :refer [test-stream lazy-parse*]]))
+            [miraj.markup]
+            [miraj.markup.test-utils :refer [test-stream lazy-parse*]]))
 
 (xml/pprint :xml
  (xml/serialize :with-xml-declaration
