@@ -714,6 +714,87 @@
     (indent e sw)
     (.toString sw)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  HTML TAGS
+
+(def attrs-regex
+  #" *[^>]* *>")
+
+(def attrs-overlap-start-regex
+  ;; e.g. for a, b, em, i, li etc
+  ;; match <li>, <li >, <li/>, <li />
+  #" */?>")
+
+(def attrs-overlap-attrs-regex
+  ;; e.g. for a, b, em, i, li etc
+  ;; match <li>, <li >, <li/>, <li />, <li foo="bar">, <li foo="bar">
+  #" +[^>]* */?>")
+
+(def encoding-decl-regex
+  ;; https://encoding.spec.whatwg.org/#names-and-labels
+  [#"(?i)unicode-1-1-utf-8"
+   #"(?i)utf-8"
+   #"(?i)utf8"])
+
+(def html5-meta-attribs
+  {:charset :encoding-decl   ;; :content is implicit as value of map entry
+   ;; standard vals for name attrib
+   :application-name :string
+   :author :string
+   :description :string
+   :generator :string
+   :keywords :tokens
+   ;; extended name attribs https://wiki.whatwg.org/wiki/MetaExtensions
+   :viewport  {:width :pixels
+               :height :pixels
+               :initial-scale :number
+               :minimum-scale :number
+               :maximum-scale :number
+               :user-scalable #{:zoom :fixed}}
+   :apple {:itunes-app :_, :mobile-web-app-capable :_, :mobile-web-app-status-bar-style :_,
+           :touch-fullscreen :_, :mobile-web-app-title :_}
+   ;; dublin core
+   :dc {:created :_, :creator :_} ;; etc.
+   :dc-terms {:created :_, :creator :_} ;; etc.
+   :fragment "!"
+   :geo {:position :geocoord, :country :iso3166-1} ;; etc.
+   :mobile {:agent {:format :_, :url :_}
+            :web-app-capable :yes}
+   :msapplication {
+                   :config :uri
+                   :navbutton-color :color
+                   :notification [:uri]
+                   :square-70x70-logo :uri
+                   :square-150x150-logo :uri
+                   :square-310x310-logo :uri
+                   :starturl :uri
+                   :task {:name :string :action-uri :uri :icon-uri :uri
+                          :window-type #{:tab :self :window}}
+                   :tile-color :color
+                   :tile-image :uri
+                   :tooltip :string
+                   :tap-highlight :no
+                   :wide-310x150-logo :uri
+                   :window {:width :pixels, :height :pixels}}
+   ;; other ms metas https://msdn.microsoft.com/library/dn255024(v=vs.85).aspx
+   :ms-pinned ^:nonstandard {:allow-domain-api-calls :bool
+                             :allow-domain-meta-tags :bool
+                             :badge {:frequency #{30 60 360 720 1440}
+                                     :polling-uri :uri}
+                             :start-url :uri
+                             :task-separator :_}
+   :referrer #{:no-referrer :no-referrer-when-downgrade
+               :origin :origin-when-cross-origin
+               :unsafe-url}
+   :revision :_
+   :twitter {:card :_
+             :domain :_
+             :url :_
+             :title :_
+             :description :_
+             ;; etc.
+             }})
+
 #_(defn make-fns
   [tags]
   (log/trace "make-fns " tags) ;; (type tags))
@@ -781,13 +862,13 @@
   (log/trace "make-polymer-fns " pfx) ;; " " tags) ;; (type tags))
   (doseq [tag tags]
     (let [ftag (symbol tag)
-          kw (keyword (str pfx tag))
+          elt (keyword (str pfx tag))
           ;; log (println "make-polymer-fns tag: " ftag " (" tag ")")
           func `(defn ~ftag ;; (symbol (str tag))
                   [& htags#]
-                  ;; (println "POLYMER FN: " ~kw (pr-str htags#))
+                  ;; (println "POLYMER FN: " ~elt (pr-str htags#))
                   (if (empty? htags#)
-                    (element ~kw)
+                    (element ~elt)
                     (let [first# (first htags#)
                           attrs# (if (map? first#)
                                    (do ;(log/trace "map? first")
@@ -803,11 +884,83 @@
                                        htags#
                                        (rest htags#))
                                      htags#)
-                          func# (apply element ~kw attrs# content#)]
+                          func# (apply element ~elt attrs# content#)]
                       ;; (log/trace "htags: " htags#)
-                      ;; (log/trace "kw: " ~kw)
+                      ;; (log/trace "elt: " ~elt)
                       ;; (log/trace "tags: " attrs#)
                       ;; (log/trace "content: " content# " (" (type content#) ")")
                       ;; (log/trace "func: " func# (type func#))
                       func#)))
           f (eval func)])))
+
+(defn make-meta-tag-fn-x
+  [tag+validator]
+  (log/trace "make-tag-fn " tag+validator)
+    (let [fn-tag (symbol (subs (str (first tag+validator)) 1))
+          fn-validator (fnext tag+validator)
+          elt (keyword fn-tag)
+          log (println "make-meta-tag-fn fn-tag: " fn-tag)
+          log (println "make-meta-tag-fn elt-tag: " elt)
+          func `(defn ~fn-tag ;; (symbol (str tag))
+                  [& fn-args#]
+                  ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
+                  (if (empty? fn-args#)
+                    (element ~elt)
+                    (let [first# (first fn-args#)
+                          attrs# (if (map? first#)
+                                   (do ;(log/trace "map? first")
+                                       (if (instance? miraj.markup.Element first#)
+                                         (do ;(log/trace "Element instance")
+                                             {})
+                                         (do ;(log/trace "NOT Element instance")
+                                             first#)))
+                                   (do ;(log/trace "NOT map? first")
+                                       {}))
+                          content# (if (map? first#)
+                                     (if (instance? miraj.markup.Element first#)
+                                       fn-args#
+                                       (rest fn-args#))
+                                     fn-args#)
+                          func# (apply element ~elt attrs# content#)]
+                      ;; (log/trace "fn-args: " fn-args#)
+                      ;; (log/trace "elt: " ~elt)
+                      ;; (log/trace "tags: " attrs#)
+                      ;; (log/trace "content: " content# " (" (type content#) ")")
+                      ;; (log/trace "func: " func# (type func#))
+                      func#)))]
+      ;;(println (macroexpand func))))
+      (eval func)))
+
+(defn make-meta-tag-fns
+  [rules]
+  (log/trace "make-meta-tag-fns " rules) ;; (type rules))
+  (let [meta-name (first rules)
+        rules (first (rest rules))]
+    (doseq [rule rules]
+      (do (println "rule: " rule)
+          (let [fn-tag (symbol (subs (str (first rule)) 1))
+                _ (println "make-meta-tag-fns fn: " fn-tag)
+                fn-validator (last (fnext rule))
+                _ (println "make-meta-tag-fns validator: " fn-validator)
+                elt (first (fnext rule))
+                _ (println (str "make-meta-tag-fns elt: " elt))]
+            (eval `(defn ~fn-tag ;; (symbol (str tag))
+                     [& fn-args#]
+                     ;; (println "FN-args: " fn-args# (count fn-args#))
+                     ;; (println "fn-validator: " ~fn-validator)
+                     (if-let [msg# (:non-conforming ~fn-validator)]
+                       (throw
+                        (Exception.
+                         (str ~meta-name "='" '~elt "' is a non-conforming feature. " msg#))))
+                     (if (empty? fn-args#)
+                       (throw (Exception. (str "HTML meta element cannot be empty" ~elt)))
+                       (if (> (count fn-args#) 1)
+                         (throw (Exception. (str "content not allowed in HTML meta element " ~elt)))
+                         (let [attribs# (merge {}
+                                               {(keyword ~meta-name) ~(str elt)
+                                                :content (str (first fn-args#))})
+                               ;; _# (println "ATTRIBS: " attribs# (type attribs#))
+                               func# (apply element "meta" (list attribs#))]
+                           func#))))))))))
+            ;; #_(println (macroexpand func))
+            ;; (eval func))))))
