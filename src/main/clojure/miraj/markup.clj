@@ -22,7 +22,7 @@
            (java.nio.charset Charset)
            (java.io Reader)))
 
-(println "loading miraj/markup.clj")
+;; (println "loading miraj/markup.clj")
 ;;FIXME:  support comment nodes
 
 (defonce mode (atom nil))
@@ -933,17 +933,18 @@
 
 (defn make-meta-tag-fns
   [rules]
-  (log/trace "make-meta-tag-fns " rules) ;; (type rules))
+  ;; (log/trace "make-meta-tag-fns " rules) ;; (type rules))
   (let [meta-name (first rules)
         rules (first (rest rules))]
     (doseq [rule rules]
-      (do (println "rule: " rule)
+      (do ;;(println "rule: " rule)
           (let [fn-tag (symbol (subs (str (first rule)) 1))
-                _ (println "make-meta-tag-fns fn: " fn-tag)
+                ;; _ (println "make-meta-tag-fns fn: " fn-tag)
                 fn-validator (last (fnext rule))
-                _ (println "make-meta-tag-fns validator: " fn-validator)
+                ;; _ (println "make-meta-tag-fns validator: " fn-validator)
                 elt (first (fnext rule))
-                _ (println (str "make-meta-tag-fns elt: " elt))]
+                ;; _ (println (str "make-meta-tag-fns elt: " elt))
+                ]
             (eval `(defn ~fn-tag ;; (symbol (str tag))
                      [& fn-args#]
                      ;; (println "FN-args: " fn-args# (count fn-args#))
