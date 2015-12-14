@@ -859,39 +859,44 @@
 
 (defn make-tag-fns
   [pfx tags sfx]
-  (log/trace "make-polymer-fns " pfx) ;; " " tags) ;; (type tags))
+  ;; (println "make-tag-fns " pfx tags sfx)
   (doseq [tag tags]
-    (let [ftag (symbol tag)
-          elt (keyword (str pfx tag))
-          ;; log (println "make-polymer-fns tag: " ftag " (" tag ")")
-          func `(defn ~ftag ;; (symbol (str tag))
-                  [& htags#]
-                  ;; (println "POLYMER FN: " ~elt (pr-str htags#))
-                  (if (empty? htags#)
-                    (element ~elt)
-                    (let [first# (first htags#)
-                          attrs# (if (map? first#)
-                                   (do ;(log/trace "map? first")
-                                       (if (instance? miraj.markup.Element first#)
-                                         (do ;(log/trace "Element instance")
+    (do ;(println "make-tag-fn " tag)
+        (let [fn-tag (cond
+                     (string? tag) (symbol tag)
+                     (vector? tag) (symbol (last tag)))
+              elt (keyword (str pfx (cond
+                                      (string? tag) tag
+                                      (vector? tag) (last tag))))
+              log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
+              func `(defn ~fn-tag ;; (symbol (str tag))
+                      [& htags#]
+                      ;; (println "POLYMER FN: " ~elt (pr-str htags#))
+                      (if (empty? htags#)
+                        (element ~elt)
+                        (let [first# (first htags#)
+                              attrs# (if (map? first#)
+                                       (do ;(log/trace "map? first")
+                                         (if (instance? miraj.markup.Element first#)
+                                           (do ;(log/trace "Element instance")
                                              {})
-                                         (do ;(log/trace "NOT Element instance")
+                                           (do ;(log/trace "NOT Element instance")
                                              first#)))
-                                   (do ;(log/trace "NOT map? first")
-                                       {}))
-                          content# (if (map? first#)
-                                     (if (instance? miraj.markup.Element first#)
-                                       htags#
-                                       (rest htags#))
-                                     htags#)
-                          func# (apply element ~elt attrs# content#)]
-                      ;; (log/trace "htags: " htags#)
-                      ;; (log/trace "elt: " ~elt)
-                      ;; (log/trace "tags: " attrs#)
-                      ;; (log/trace "content: " content# " (" (type content#) ")")
-                      ;; (log/trace "func: " func# (type func#))
-                      func#)))
-          f (eval func)])))
+                                       (do ;(log/trace "NOT map? first")
+                                         {}))
+                              content# (if (map? first#)
+                                         (if (instance? miraj.markup.Element first#)
+                                           htags#
+                                           (rest htags#))
+                                         htags#)
+                              func# (apply element ~elt attrs# content#)]
+                          ;; (log/trace "htags: " htags#)
+                          ;; (log/trace "elt: " ~elt)
+                          ;; (log/trace "tags: " attrs#)
+                          ;; (log/trace "content: " content# " (" (type content#) ")")
+                          ;; (log/trace "func: " func# (type func#))
+                          func#)))
+              f (eval func)]))))
 
 (defn make-meta-tag-fn-x
   [tag+validator]
