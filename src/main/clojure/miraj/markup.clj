@@ -172,17 +172,17 @@
 ;;FIXME: support :xhtml option
 (defn pprint
   [& elts]
-  (log/trace "PPRINT elts: " elts)
+  ;; (log/trace "PPRINT elts: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
-            (do (log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
+            (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
                 (rest elts))
             (if (keyword? (first elts))
               (throw (Exception. "only :html and :xml supported"))
               elts))
         fmt (if (keyword? (first elts)) (first elts) :xml)
         void (reset! mode fmt)
-        log (log/trace "mode: " @mode)
+        ;; log (log/trace "mode: " @mode)
         ;; always serialize to xml, deal with html issues in the transform
         ml (if (string? s)
              (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))
@@ -333,7 +333,7 @@
   (gen-event [sym]
     (let [nm (name sym)
           ns (namespace sym)]
-      (log/trace "gen-event Symbol: " sym)
+      ;; (log/trace "gen-event Symbol: " sym)
       (Event. :sym nil nil
               (str "{{" ns (if ns ".") nm "}}"))))
       ;;         (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
@@ -833,7 +833,7 @@
 
 (defn make-void-elt-fns
   [tags]
-  (log/trace "make-void-elt-fns " tags) ;; (type tags))
+  ;; (log/trace "make-void-elt-fns " tags) ;; (type tags))
   (doseq [tag tags]
     ;; (log/trace "make-void-elt-fns fn: " tag) ;; (type tag))
     (let [ftag (symbol tag)
@@ -868,7 +868,7 @@
               elt (keyword (str pfx (cond
                                       (string? tag) tag
                                       (vector? tag) (last tag))))
-              log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
+              ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
                       [& htags#]
                       ;; (println "POLYMER FN: " ~elt (pr-str htags#))
@@ -900,12 +900,12 @@
 
 (defn make-meta-tag-fn-x
   [tag+validator]
-  (log/trace "make-tag-fn " tag+validator)
+  ;; (log/trace "make-tag-fn " tag+validator)
     (let [fn-tag (symbol (subs (str (first tag+validator)) 1))
           fn-validator (fnext tag+validator)
           elt (keyword fn-tag)
-          log (println "make-meta-tag-fn fn-tag: " fn-tag)
-          log (println "make-meta-tag-fn elt-tag: " elt)
+          ;; log (println "make-meta-tag-fn fn-tag: " fn-tag)
+          ;; log (println "make-meta-tag-fn elt-tag: " elt)
           func `(defn ~fn-tag ;; (symbol (str tag))
                   [& fn-args#]
                   ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
