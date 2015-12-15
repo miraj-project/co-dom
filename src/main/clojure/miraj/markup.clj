@@ -1013,9 +1013,7 @@
                                                  :doc ~docstring
                                                  :elt-tag ~elt-tag
                                                  :elt-uri ~elt-uri}})))]
-                         (println "deffing " elt#)
                          elt#)))
-;;                       (println "done " (ns-name *ns*) fn-tag)))))
               (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
                             (fn [old new]
                               (merge old new))
