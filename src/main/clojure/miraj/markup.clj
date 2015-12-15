@@ -649,6 +649,7 @@
     (apply emit e sw opts)
     (.toString sw)))
 
+;;FIXME - support :link arg, to generate <link...> for co-fns
 (defn serialize
   "Serializes the Element to String and returns it.
    Options:
@@ -857,47 +858,6 @@
                           func#))))))
           f (eval func)])))
 
-(defn make-tag-fns
-  [pfx tags sfx]
-  ;; (println "make-tag-fns " pfx tags sfx)
-  (doseq [tag tags]
-    (do ;(println "make-tag-fn " tag)
-        (let [fn-tag (cond
-                     (string? tag) (symbol tag)
-                     (vector? tag) (symbol (last tag)))
-              elt (keyword (str pfx (cond
-                                      (string? tag) tag
-                                      (vector? tag) (last tag))))
-              ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
-              func `(defn ~fn-tag ;; (symbol (str tag))
-                      [& htags#]
-                      ;; (println "POLYMER FN: " ~elt (pr-str htags#))
-                      (if (empty? htags#)
-                        (element ~elt)
-                        (let [first# (first htags#)
-                              attrs# (if (map? first#)
-                                       (do ;(log/trace "map? first")
-                                         (if (instance? miraj.markup.Element first#)
-                                           (do ;(log/trace "Element instance")
-                                             {})
-                                           (do ;(log/trace "NOT Element instance")
-                                             first#)))
-                                       (do ;(log/trace "NOT map? first")
-                                         {}))
-                              content# (if (map? first#)
-                                         (if (instance? miraj.markup.Element first#)
-                                           htags#
-                                           (rest htags#))
-                                         htags#)
-                              func# (apply element ~elt attrs# content#)]
-                          ;; (log/trace "htags: " htags#)
-                          ;; (log/trace "elt: " ~elt)
-                          ;; (log/trace "tags: " attrs#)
-                          ;; (log/trace "content: " content# " (" (type content#) ")")
-                          ;; (log/trace "func: " func# (type func#))
-                          func#)))
-              f (eval func)]))))
-
 (defn make-meta-tag-fn-x
   [tag+validator]
   ;; (log/trace "make-tag-fn " tag+validator)
@@ -970,3 +930,100 @@
                            func#))))))))))
             ;; #_(println (macroexpand func))
             ;; (eval func))))))
+
+(defn make-tag-fns
+  [pfx tags sfx]
+  ;; (println "make-tag-fns " pfx tags sfx)
+  (doseq [tag tags]
+    (do ;(println "make-tag-fn " tag)
+        (let [fn-tag (cond
+                     (string? tag) (symbol tag)
+                     (vector? tag) (symbol (last tag)))
+              elt (keyword (str pfx (cond
+                                      (string? tag) tag
+                                      (vector? tag) (last tag))))
+              ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
+              func `(defn ~fn-tag ;; (symbol (str tag))
+                      [& htags#]
+                      ;; (println "POLYMER FN: " ~elt (pr-str htags#))
+                      (if (empty? htags#)
+                        (element ~elt)
+                        (let [first# (first htags#)
+                              attrs# (if (map? first#)
+                                       (do ;(log/trace "map? first")
+                                         (if (instance? miraj.markup.Element first#)
+                                           (do ;(log/trace "Element instance")
+                                             {})
+                                           (do ;(log/trace "NOT Element instance")
+                                             first#)))
+                                       (do ;(log/trace "NOT map? first")
+                                         {}))
+                              content# (if (map? first#)
+                                         (if (instance? miraj.markup.Element first#)
+                                           htags#
+                                           (rest htags#))
+                                         htags#)
+                              func# (with-meta (apply element ~elt attrs# content#)
+                                      {:co-fn true
+                                       :elt-tag ~elt
+                                       :elt-uri "foo/bar"})]
+                          ;; (log/trace "htags: " htags#)
+                          ;; (log/trace "elt: " ~elt)
+                          ;; (log/trace "tags: " attrs#)
+                          ;; (log/trace "content: " content# " (" (type content#) ")")
+                          ;; (log/trace "func: " func# (type func#))
+                          func#)))
+              f (eval func)]))))
+
+(defn make-resource-fns
+  [typ tags]
+  (do  (println "make-resource-fns: " typ tags)
+        (doseq [[fn-tag elt-tag elt-uri docstring] tags]
+          (do (println "make resource:" fn-tag elt-tag elt-uri)
+              (eval `(defn ~fn-tag ~docstring
+                       [& args#]
+;;                       (println "invoking " ~fn-tag)
+                       (let [elt# (if (empty? args#)
+                                    (with-meta (element ~elt-tag)
+                                      {:miraj
+                                       {:co-fn true
+                                        :co-type ~typ
+                                        :doc ~docstring
+                                        :elt-tag ~elt-tag
+                                        :elt-uri ~elt-uri}})
+
+                                    (let [attrib-args# (first args#)
+                                          attrs# (if (map? attrib-args#)
+                                                   (do ;(log/trace "map? first")
+                                                     (if (instance? miraj.markup.Element attrib-args#)
+                                                       (do ;(log/trace "Element instance")
+                                                         {})
+                                                       (do ;(log/trace "NOT Element instance")
+                                                         attrib-args#)))
+                                                   (do ;(log/trace "NOT map? attrib-args#")
+                                                     {}))
+                                          content# (if (map? attrib-args#)
+                                                     (if (instance? miraj.markup.Element attrib-args#)
+                                                       args#
+                                                       (rest args#))
+                                                     args#)]
+                                      (with-meta (apply element ~elt-tag attrs# content#)
+                                        {:miraj {:co-fn true
+                                                 :co-type ~typ
+                                                 :doc ~docstring
+                                                 :elt-tag ~elt-tag
+                                                 :elt-uri ~elt-uri}})))]
+                         (println "deffing " elt#)
+                         elt#)))
+;;                       (println "done " (ns-name *ns*) fn-tag)))))
+              (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
+                            (fn [old new]
+                              (merge old new))
+                            {:miraj {:co-fn true
+                                     :co-type typ
+                                     :doc docstring
+                                     :elt-tag elt-tag
+                                     :elt-uri elt-uri}})
+              (println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
+;              )))))
+

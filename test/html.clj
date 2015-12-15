@@ -1,12 +1,9 @@
-(ns tags
-  (:require [miraj.html :as h] ;; :refer :all :exclude [button menu progress form]]
+(ns test.html
+  (:require [miraj.html :as h]
             [miraj.markup :as xml]
             [clojure.tools.logging :as log :only [trace debug error info]]
             [clojure.pprint :as pp]
             [clojure.string :as string]
-            [clojure.tools.reader :as reader]
-            [clojure.tools.reader.edn :as edn]
-            [clojure.tools.reader.reader-types :as readers]
             [clojure.test]))
             ;; [miraj.markup.test-utils :refer [test-stream lazy-parse*]]))
 
