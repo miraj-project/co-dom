@@ -15,4 +15,4 @@
 (xml/pprint :html (paper/dialog {:id "foo" :x 'employees}))
 
 
-(paper/dialog {:id "foo" :x 'employees})
+(meta (paper/dialog {:id "foo" :x 'employees}))
