@@ -116,6 +116,7 @@
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
+
    "<xsl:template match='html'>"
      "<xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html&gt;&#xA;</xsl:text>"
      "&#xA;"
@@ -123,12 +124,23 @@
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
-   "<xsl:template match=\"" (str/join "|" html5-void-elt-tags) "\">"  ;;*[.='']\">"
+
+   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elt-tags) "\">"  ;;*[.='']\">"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
        "VOID"
      "</xsl:copy>"
    "</xsl:template>"
+
+   ;; remove self-closing tags
+   "<xsl:template match='*[not(node()) and not(string(.))]'>"
+   ;; "<xsl:message>EMPTY TAG</xsl:message>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+       "_EMPTY_333109"
+     "</xsl:copy>"
+   "</xsl:template>"
+
    "<xsl:template match=\"@*\">"
    ;; Handle HTML boolean attributes
      "<xsl:choose>"
@@ -170,9 +182,9 @@
 
 ;;FIXME: support non-tree input
 ;;FIXME: support :xhtml option
-(defn pprint
+(defn pprint-impl
   [& elts]
-  ;; (log/trace "PPRINT elts: " elts)
+  (log/trace "pprint-impl: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -205,7 +217,8 @@
                       (do
                         ;;(log/trace "transforming with identity-transform-xml")
                       (.newTransformer factory (StreamSource. (StringReader. identity-transform-xml)))))]
-;;                      (.newTransformer factory))]
+    ;;                      (.newTransformer factory))]
+    (println "MARKUP: " ml)
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
@@ -219,11 +232,24 @@
                      s (.toString string-writer)
                      void (.flush string-writer)
                      s (str/replace s #"VOID<[^>]+>" "")
+                     s (str/replace s #"_EMPTY_333109" "")
                      regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
                  ;; boolean attribs: value must be "" or must match attrib name
                  ;;FIXME: make this more robust
                  (str/replace s regx ""))
                (.toString (.getWriter xmlOutput))))))
+
+(defn pprint
+  [& elts]
+  (log/trace "PPRINT elts: " elts)
+  (if (keyword? (first elts))
+    (do (log/trace "next elts: " (next elts))
+        (if (nil? (nnext elts))
+          nil
+          (apply pprint-impl elts)))
+    (if (nil? (first elts))
+      nil
+      (apply pprint-impl elts))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   (let [[nspace qname] (qualified-name (:name event))]
@@ -279,10 +305,12 @@
                (.write writer (:str event)))       ; writes without escaping < & etc.
              )
     (.writeCharacters stream-writer (:str event))
+
     :kw (.writeCharacters stream-writer (:str event))
     :sym (.writeCharacters stream-writer (:str event))
     :cdata (emit-cdata (:str event) stream-writer)
-    :comment (.writeComment stream-writer (:str event))))
+    :comment (.writeComment stream-writer (:str event))
+    (throw (Exception. (str "no matching clause: ") (:type event)))))
 
 (defprotocol EventGeneration
   "Protocol for generating new events based on element type"
@@ -317,6 +345,12 @@
     (if-let [r (seq (rest coll))]
       (cons (next-events (first coll) r) next-items)
       (next-events (first coll) next-items)))
+
+  ;; clojure.lang.PersistentArrayMap
+  ;; (gen-event [coll]
+  ;;   (println (str "GEN-EVENT: " coll)))
+  ;; (next-events [coll next-items]
+  ;;   (println (str "NEXT-EVENTS: " coll next-items)))
 
   clojure.lang.Keyword
   (gen-event [kw]
@@ -634,7 +668,7 @@
     (if (:with-xml-declaration opts)
       (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
     (doseq [event (flatten-elements [e])]
-      (do ;(log/trace "event: " event)
+      (do ;;(log/trace "event: " event)
           (emit-event event stream-writer writer)))
     ;; (.writeEndDocument stream-writer)
     writer))
@@ -715,86 +749,6 @@
     (indent e sw)
     (.toString sw)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  HTML TAGS
-
-(def attrs-regex
-  #" *[^>]* *>")
-
-(def attrs-overlap-start-regex
-  ;; e.g. for a, b, em, i, li etc
-  ;; match <li>, <li >, <li/>, <li />
-  #" */?>")
-
-(def attrs-overlap-attrs-regex
-  ;; e.g. for a, b, em, i, li etc
-  ;; match <li>, <li >, <li/>, <li />, <li foo="bar">, <li foo="bar">
-  #" +[^>]* */?>")
-
-(def encoding-decl-regex
-  ;; https://encoding.spec.whatwg.org/#names-and-labels
-  [#"(?i)unicode-1-1-utf-8"
-   #"(?i)utf-8"
-   #"(?i)utf8"])
-
-(def html5-meta-attribs
-  {:charset :encoding-decl   ;; :content is implicit as value of map entry
-   ;; standard vals for name attrib
-   :application-name :string
-   :author :string
-   :description :string
-   :generator :string
-   :keywords :tokens
-   ;; extended name attribs https://wiki.whatwg.org/wiki/MetaExtensions
-   :viewport  {:width :pixels
-               :height :pixels
-               :initial-scale :number
-               :minimum-scale :number
-               :maximum-scale :number
-               :user-scalable #{:zoom :fixed}}
-   :apple {:itunes-app :_, :mobile-web-app-capable :_, :mobile-web-app-status-bar-style :_,
-           :touch-fullscreen :_, :mobile-web-app-title :_}
-   ;; dublin core
-   :dc {:created :_, :creator :_} ;; etc.
-   :dc-terms {:created :_, :creator :_} ;; etc.
-   :fragment "!"
-   :geo {:position :geocoord, :country :iso3166-1} ;; etc.
-   :mobile {:agent {:format :_, :url :_}
-            :web-app-capable :yes}
-   :msapplication {
-                   :config :uri
-                   :navbutton-color :color
-                   :notification [:uri]
-                   :square-70x70-logo :uri
-                   :square-150x150-logo :uri
-                   :square-310x310-logo :uri
-                   :starturl :uri
-                   :task {:name :string :action-uri :uri :icon-uri :uri
-                          :window-type #{:tab :self :window}}
-                   :tile-color :color
-                   :tile-image :uri
-                   :tooltip :string
-                   :tap-highlight :no
-                   :wide-310x150-logo :uri
-                   :window {:width :pixels, :height :pixels}}
-   ;; other ms metas https://msdn.microsoft.com/library/dn255024(v=vs.85).aspx
-   :ms-pinned ^:nonstandard {:allow-domain-api-calls :bool
-                             :allow-domain-meta-tags :bool
-                             :badge {:frequency #{30 60 360 720 1440}
-                                     :polling-uri :uri}
-                             :start-url :uri
-                             :task-separator :_}
-   :referrer #{:no-referrer :no-referrer-when-downgrade
-               :origin :origin-when-cross-origin
-               :unsafe-url}
-   :revision :_
-   :twitter {:card :_
-             :domain :_
-             :url :_
-             :title :_
-             :description :_
-             ;; etc.
-             }})
 
 #_(defn make-fns
   [tags]
@@ -975,11 +929,12 @@
                           func#)))
               f (eval func)]))))
 
+;;FIXME rename this to make-component-fns
 (defn make-resource-fns
   [typ tags]
-  (do  (println "make-resource-fns: " typ tags)
+  (do ;;(println "make-resource-fns: " typ tags)
         (doseq [[fn-tag elt-tag elt-uri docstring] tags]
-          (do (println "make resource:" fn-tag elt-tag elt-uri)
+          (do ;(println "make resource:" fn-tag elt-tag elt-uri)
               (eval `(defn ~fn-tag ~docstring
                        [& args#]
 ;;                       (println "invoking " ~fn-tag)
@@ -1022,6 +977,6 @@
                                      :doc docstring
                                      :elt-tag elt-tag
                                      :elt-uri elt-uri}})
-              (println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
+              #_(println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
 ;              )))))
 
