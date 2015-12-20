@@ -8,10 +8,10 @@
 
 (ns ^{:doc "Tests for reading [:tag {:attr 'value} body*] as XML."
       :author "Alan Malloy"}
-  miraj.markup.test-sexp
+  data.xml.test-sexp
   (:use clojure.test
         miraj.markup
-        [miraj.markup.test-utils :only (test-stream lazy-parse*)]))
+        [data.xml.test-utils :only (test-stream lazy-parse*)]))
 
 (deftest as-element
   (let [xml-input "<tag attr=\"value\"><body /></tag>"

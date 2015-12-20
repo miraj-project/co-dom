@@ -8,10 +8,10 @@
 
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
-  miraj.markup.test-emit
+  data.xml.test-emit
   (:use clojure.test
         miraj.markup
-        [miraj.markup.test-utils :only (test-stream lazy-parse*)]))
+        [data.xml.test-utils :only (test-stream lazy-parse*)]))
 
 (def deep-tree
   (lazy-parse* (str "<a h=\"1\" i='2' j=\"3\">"
@@ -129,7 +129,7 @@
 
 (deftest test-boolean
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>true</foo>"
-         (emit-str (element :foo {} true)))))
+         (emit-str :with-xml-declaration (element :foo {} true)))))
 
 (deftest test-number
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>1</foo>"

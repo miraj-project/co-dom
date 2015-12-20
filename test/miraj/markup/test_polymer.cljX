@@ -1,6 +1,6 @@
 (ns ^{:doc "Tests for polymer html functions"
       :author "Gregg Reynolds"}
-  miraj.markup.test-polymer
+  data.xml.test-polymer
   (:refer-clojure :exclude [map meta time])
   (:require ;;[miraj.core :refer :all]
             [miraj.html :as h :refer :all]
@@ -15,7 +15,7 @@
             [clojure.tools.reader.reader-types :as readers]
             [clojure.test :refer :all]
             [miraj.markup]
-            [miraj.markup.test-utils :refer [test-stream lazy-parse*]]))
+            [data.xml.test-utils :refer [test-stream lazy-parse*]]))
 
 (deftest ^:polymer test-1
   (testing "test 1"

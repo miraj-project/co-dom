@@ -12,5 +12,12 @@
                                                     com.sun.jmx/jmxri]]
                  [ clj-logging-config "1.9.7"]]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
-                   :source-paths ["src/main/clojure" "src/test/clojure" "dev"]}}
-  :repl-options {:port 4001})
+                   :source-paths ["src/main/clojure" "src/test/clojure" "dev"]}
+             :test {:resource-paths ["test/resources"]
+                    :dependencies [[miraj "1.1.4-SNAPSHOT"]
+                                   [polymer/paper "1.2.3-SNAPSHOT"]
+                                   [miraj/html "5.1.0-SNAPSHOT"]]}}
+  :repl-options {:port 4001}
+  :test-selectors {:elts :elts
+                   :html :html
+                   :attrs :attrs})

@@ -1,9 +1,9 @@
 (ns ^{:doc "Tests for serialization"
       :author "Gregg Reynolds"}
-  miraj.markup.test-serialize
-  (:require [miraj.core :refer :all]
-            [miraj.html :as h :refer :all]
-            [miraj.ml.polymer :as p :refer :all]
+  data.xml.test-serialize
+  (:require [miraj :refer :all]
+            [miraj.html :as h]
+            ;; [polymer/paper :as paper]
             [miraj.markup :as xml]
             [clojure.tools.logging :as log :only [trace debug error info]]
             [clojure.pprint :as pp]
@@ -13,10 +13,10 @@
             [clojure.tools.reader.reader-types :as readers]
             [clojure.test]
             [miraj.markup]
-            [miraj.markup.test-utils :refer [test-stream lazy-parse*]]))
+            [data.xml.test-utils :refer [test-stream lazy-parse*]]))
 
 (xml/pprint :xml
- (xml/serialize :with-xml-declaration
+ (xml/serialize :xml ;; :with-xml-declaration
   (h/html
    (h/link {:rel "import" :href "/polymer/polymer/polymer.html"})
    (h/link {:rel "import" :href "/polymer/polymer/foo.html"})

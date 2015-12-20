@@ -8,7 +8,7 @@
 
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
-  miraj.markup.test-utils
+  data.xml.test-utils
   (:require [miraj.markup :as xml]))
 
 (defn test-stream [x]
