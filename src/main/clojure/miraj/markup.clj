@@ -28,6 +28,39 @@
 (defonce mode (atom nil))
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
 
+(def html5-void-elt-tags
+  #{"area" "base" "br" "col"
+   "embed" "hr" "img" "input"
+   "keygen" "link" "meta" "param"
+   "source" "track" "wbr"})
+
+(def html5-global-attrs
+  "https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes"
+  ;;FIXME - handle data-*
+  {:access-key :class :content-editable :context-menu :dir :draggable
+   :drop-zone :hidden :id :item-id :item-prop :item-ref :item-scope :item-type
+   :lang :spellcheck :style :tab-index :title :translate})
+
+(def html5-link-types
+  #{:alternate :archives :author :bookmark :dns-prefetch :external :first
+    :help :icon :index :last :license :next :no-follow :no-referrer :ping-back
+    :preconnect :prefetch :preload :prerender :prev
+    :search :stylesheet :sidebar :tag :up})
+
+(def html5-link-attrs
+  {:crossorigin #{:anonymous :use-credentials}
+   :disabled :deprecated
+   :href :uri
+   :hreflang :bcp47  ;; http://www.ietf.org/rfc/bcp/bcp47.txt
+   :integrity :_
+   :media :_
+   :methods :_
+   :rel :link-type ;; https://developer.mozilla.org/en-US/docs/Web/HTML/Link_types
+   :rev :obsolete
+   :sizes :sizes
+   :target :_
+   :type :mime})
+
 ; Represents a parse event.
 ; type is one of :start-element, :end-element, or :characters
 (defrecord Event [type name attrs str])
@@ -43,19 +76,32 @@
        name-parts
        [nil (first name-parts)]))))
 
+(defn validate-html-rel-attval
+  [val]
+  (println "validate-html-rel-attval " val)
+  (contains? html5-link-types val))
+
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
     ;; (log/trace "ATTR: " k " = " v " " (type v))
-    (let [[attr-ns attr-name] (qualified-name k)
-          ;; Polymer annotation: sym=one-way, kw=two-way
-          ;; e.g.  {:items 'employees} => items="[[employees]]"
-          ;; e.g.  {:items :employees} => items="{{employees}}"
-          attr-val (cond
-                     (keyword? v) (str "{{" (subs (str v) 1) "}}")
-                     (symbol? v) (str "[[" (str v) "]]")
-                     (= (subs (str k) 1) (str v)) miraj-boolean-tag
-                     (empty? v) miraj-boolean-tag
-                     :else v)]
+    (let [[attr-ns nm] (qualified-name k)
+          attr-name (if (= :html @mode) (str/replace nm #"-" "") nm)
+          attr-val (if (= :html @mode)
+                     (cond
+                       (= :rel k) (if-let [val (contains? html5-link-types v)]
+                                    val (throw (Exception.
+                                                (str "invalid link type value for rel attribute: {"
+                                                     k " " v "}; valid values are: "
+                                                     html5-link-types))))
+                       (keyword? v) (str "{{" (subs (str v) 1) "}}")
+                       (symbol? v) (str "[[" (str v) "]]")
+                       ;; (= (subs (str k) 1) (str v)) miraj-boolean-tag
+                       ;; (empty? v) miraj-boolean-tag
+                       (nil? v) miraj-boolean-tag
+                       :else v)
+                     (if (nil? v) (throw
+                                   (Exception. (str "Clojure nil attribute val disallowed: {"
+                                                    k " " (pr-str v) "}"))) v))]
       (if attr-ns
         (.writeAttribute writer attr-ns attr-name attr-val)
         (.writeAttribute writer attr-name attr-val)))))
@@ -97,12 +143,6 @@
 
 ;; In other words, HTML5 syntax and semantics are not uniform across
 ;; all elements.
-
-(def html5-void-elt-tags
-  #{"area" "base" "br" "col"
-   "embed" "hr" "img" "input"
-   "keygen" "link" "meta" "param"
-   "source" "track" "wbr"})
 
 (def identity-transform-html
    ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
@@ -184,7 +224,7 @@
 ;;FIXME: support :xhtml option
 (defn pprint-impl
   [& elts]
-  (log/trace "pprint-impl: " elts)
+  ;; (log/trace "pprint-impl: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -218,7 +258,6 @@
                         ;;(log/trace "transforming with identity-transform-xml")
                       (.newTransformer factory (StreamSource. (StringReader. identity-transform-xml)))))]
     ;;                      (.newTransformer factory))]
-    (println "MARKUP: " ml)
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
@@ -241,10 +280,10 @@
 
 (defn pprint
   [& elts]
-  (log/trace "PPRINT elts: " elts)
+  ;; (log/trace "PPRINT elts: " elts)
   (if (keyword? (first elts))
-    (do (log/trace "next elts: " (next elts))
-        (if (nil? (nnext elts))
+    (do ;(log/trace "fnext elts: " (fnext elts))
+        (if (nil? (fnext elts))
           nil
           (apply pprint-impl elts)))
     (if (nil? (first elts))
@@ -687,6 +726,7 @@
 (defn serialize
   "Serializes the Element to String and returns it.
    Options:
+    mode:  :html (default) or :xml
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   ;; [& args]
@@ -697,7 +737,7 @@
                (if (keyword? (first elts))
                  (throw (Exception. "only :html and :xml supported"))
                  elts))
-        fmt (if (keyword? (first elts)) (first elts) :xml)
+        fmt (if (keyword? (first elts)) (first elts) :html)
         ^java.io.StringWriter
         string-writer (java.io.StringWriter.)]
     (reset! mode fmt)
