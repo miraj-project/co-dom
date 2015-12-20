@@ -81,18 +81,31 @@
   (println "validate-html-rel-attval " val)
   (contains? html5-link-types val))
 
+(def camel-case-regex #"[a-z]*[A-Z][a-z]*") ;; FIXME: do we need a proper cc regex?
+
+(defn validate-html5-attr-name
+  [nm val]
+  ;;FIXME: allow for HTML attrnames that do use "-", e.g. data-*, dns-prefetch, etc.
+  ;; What about user-defined attrs?  Tough luck?
+  (if (re-matches #".*[A-Z].*" (str nm))
+    (throw (Exception. (str "HTML attribute names are case-insensitive; currently, only lower-case is allowed.  (This restriction will be relaxed in a later version.)  Please use clojure-case (lower-case with dashes) for {" (keyword nm) " " val "}."))))
+    ;; (throw (Exception. (str "camelCase attr names disallowed for HTML serialization.  Please use Clojure-case for " nm "."))))
+  (str/replace nm #"-" ""))
+
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
     ;; (log/trace "ATTR: " k " = " v " " (type v))
     (let [[attr-ns nm] (qualified-name k)
-          attr-name (if (= :html @mode) (str/replace nm #"-" "") nm)
+          attr-name (if (= :html @mode) (validate-html5-attr-name nm v) nm)
           attr-val (if (= :html @mode)
                      (cond
-                       (= :rel k) (if-let [val (contains? html5-link-types v)]
-                                    val (throw (Exception.
-                                                (str "invalid link type value for rel attribute: {"
-                                                     k " " v "}; valid values are: "
-                                                     html5-link-types))))
+                       (= :rel k) (if (contains? html5-link-types
+                                                 (if (string? v) (keyword v) v))
+                                    (if (keyword? v) (subs (str v) 1) v)
+                                    (throw (Exception.
+                                            (str "Invalid link type value for rel attribute: {"
+                                                 k " " v "}; valid values are: "
+                                                 html5-link-types))))
                        (keyword? v) (str "{{" (subs (str v) 1) "}}")
                        (symbol? v) (str "[[" (str v) "]]")
                        ;; (= (subs (str k) 1) (str v)) miraj-boolean-tag
@@ -460,7 +473,9 @@
              (flatten-elements (next-events e (rest elements)))))))))
 
 (defn element [tag & [attrs & content]]
-  (Element. tag (or attrs {}) (remove nil? content)))
+  (let [e (Element. tag (or attrs {}) (remove nil? content))]
+    #_(println "E: " e)
+    e))
 
 (defn cdata [content]
   (CData. content))
