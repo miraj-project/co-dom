@@ -3,7 +3,7 @@
   :url "https://github.com/mobileink/data.xml"
   :source-paths ["src/main/clojure"]
   ;; :test-paths ["src/test/clojure"]
-  :dependencies [[org.clojure/clojure "1.8.0-RC3"]
+  :dependencies [[org.clojure/clojure "1.8.0-RC4"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.slf4j/slf4j-log4j12 "1.7.1"]

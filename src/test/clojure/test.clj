@@ -1,7 +1,20 @@
 (ns test
-  (:require [clojure.java.io :as io]
-            [clojure.test :refer :all]
-            [clojure.zip :as zip]
-            [clojure.data.zip.xml :as zx]
-            [miraj.markup :refer :all]))
+  (:require [miraj.markup :refer :all]))
 
+(def doc (element :html
+                  (element :head
+                           (element :meta {:name "description"
+                                           :content "co-compile test"})
+                           (element :script {:src "/scripts/foo.js"}))
+                  (element :body
+                           (element :h1 "Hello World"))))
+
+(println doc)
+
+(println (serialize doc))
+
+(println (optimize :js doc))
+
+(co-compile "resources/footest.html"
+            (optimize :js doc)
+            :pprint)
