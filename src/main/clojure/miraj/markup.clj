@@ -9,9 +9,7 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
-  (:require [clojure.zip :as zip]
-            [clojure.data.zip.xml :as zx]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -112,7 +110,7 @@
                        ;; (= (subs (str k) 1) (str v)) miraj-boolean-tag
                        ;; (empty? v) miraj-boolean-tag
                        (nil? v) miraj-boolean-tag
-                       :else v)
+                       :else (str v))
                      (if (nil? v) (throw
                                    (Exception. (str "Clojure nil attribute val disallowed: {"
                                                     k " " (pr-str v) "}")))
