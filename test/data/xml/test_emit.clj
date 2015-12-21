@@ -34,11 +34,13 @@
                       "    t8<f>t10</f>t11</e>"
                       "  t12<g>t13</g>t14"
                       "</a>")]
-      (is (= expect (emit-str deep-tree)))))
+      (is (= expect (emit-str deep-tree :with-xml-declaration true)))))
 
   (testing "namespaced defaults"
     (let [expect (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bar item=\"1\"><baz item=\"2\">done</baz></bar>")]
-      (is (= expect (emit-str (element "foo/bar" {"foo/item" 1} [(element "foo/baz" {"foo/item" 2} "done")])))))))
+      (is (= expect (emit-str
+                     (element "foo/bar" {"foo/item" 1} (element "foo/baz" {"foo/item" 2} "done"))
+                     :with-xml-declaration true))))))
 
 (deftest mixed-quotes
   (is (= (lazy-parse*
@@ -48,7 +50,8 @@
          (lazy-parse*
           (emit-str (element :mixed
                              {:single "'single'quotes'here"
-                              :double "\"double\"quotes\"here\""}))))))
+                              :double "\"double\"quotes\"here\""})
+                    :with-xml-declaration true)))))
 
 ;; TODO add an indentation test once we figure out how to indent portably across JREs
 
@@ -56,7 +59,7 @@
 (defn emit-char-seq [xml-tree encoding]
   (with-open [bos (java.io.ByteArrayOutputStream.)
         stream (java.io.OutputStreamWriter. bos encoding)]
-    (emit xml-tree stream :encoding encoding)
+    (emit xml-tree stream :encoding encoding :with-xml-declaration true)
     (.flush stream)
     (map #(if (pos? %) (char %) %) (.toByteArray bos))))
 
@@ -65,9 +68,11 @@
          (lazy-parse* "<how-cool>Übercool</how-cool>")]
     (is (= (concat "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                    "<how-cool>" [-61 -100] "bercool</how-cool>")
+                   ;; "<how-cool>" [0xC3 0x93] "bercool</how-cool>")
            (emit-char-seq input-tree "UTF-8")))
     (is (= (concat "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"
                    "<how-cool>" [-36] "bercool</how-cool>")
+                   ;; "<how-cool>" [0xDC] "bercool</how-cool>")
            (emit-char-seq input-tree "ISO-8859-1")))))
 
 (deftest encoding-assertion
@@ -81,31 +86,41 @@
     (is (= (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 "<cdata-stuff><![CDATA[<goes><here>]]></cdata-stuff>")
            (emit-str (element :cdata-stuff {}
-                              (cdata "<goes><here>"))))))
+                              (cdata "<goes><here>"))
+                     :with-xml-declaration true))))
   (testing "cdata with ]]> chars"
     (is (= (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 "<cdata-stuff><![CDATA[<goes><here>]]]]><![CDATA[><and><here>]]></cdata-stuff>")
            (emit-str (element :cdata-stuff {}
-                              (cdata "<goes><here>]]><and><here>"))))))
+                              (cdata "<goes><here>]]><and><here>"))
+                     :with-xml-declaration true))))
   (testing "cdata with ]]> chars and newlines"
     (is (= (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                 "<cdata-stuff><![CDATA[<goes><here>\n\n\n]]]]><![CDATA[><and><here>]]></cdata-stuff>")
            (emit-str (element :cdata-stuff {}
-                              (cdata "<goes><here>\n\n\n]]><and><here>")))))))
+                              (cdata "<goes><here>\n\n\n]]><and><here>"))
+                     :with-xml-declaration true)))))
 
 (deftest emitting-cdata-with-embedded-end
   (is (= (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<cdata-stuff><![CDATA[<goes><here>]]]]><![CDATA[><and><here>]]></cdata-stuff>")
          (emit-str (element :cdata-stuff {}
-                                (cdata "<goes><here>]]><and><here>")))))  )
+                            (cdata "<goes><here>]]><and><here>"))
+                   :with-xml-declaration true))))
 
 (deftest emitting-comment
+  (is (= (str "<comment-stuff>comment <!-- goes here --> not here</comment-stuff>")
+         (emit-str (element :comment-stuff {}
+                            "comment "
+                            (xml-comment " goes here ")
+                            " not here"))))
   (is (= (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<comment-stuff>comment <!-- goes here --> not here</comment-stuff>")
          (emit-str (element :comment-stuff {}
-                                "comment "
-                                (xml-comment " goes here ")
-                                " not here")))))
+                            "comment "
+                            (xml-comment " goes here ")
+                            " not here")
+                   :with-xml-declaration true))))
 
 (def xml-decl-newline?
   (-> (System/getProperty "java.version")
@@ -129,14 +144,15 @@
 
 (deftest test-boolean
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>true</foo>"
-         (emit-str :with-xml-declaration (element :foo {} true)))))
+         (emit-str (element :foo {} true)
+                    :with-xml-declaration true))))
 
 (deftest test-number
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>1</foo>"
-         (emit-str (element :foo {} 1))))
+         (emit-str (element :foo {} 1) :with-xml-declaration true)))
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>1.2</foo>"
-         (emit-str (element :foo {} 1.2))))
+         (emit-str (element :foo {} 1.2) :with-xml-declaration true)))
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>0</foo>"
-         (emit-str (element :foo {} (int 0)))))
+         (emit-str (element :foo {} (int 0)) :with-xml-declaration true)))
   (is (= "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo>1.2</foo>"
-         (emit-str (element :foo {} (float 1.2))))))
+         (emit-str (element :foo {} (float 1.2)) :with-xml-declaration true))))
