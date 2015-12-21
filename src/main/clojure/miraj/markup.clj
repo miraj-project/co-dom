@@ -9,7 +9,9 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
-  (:require [clojure.string :as str]
+  (:require [clojure.zip :as zip]
+            [clojure.data.zip.xml :as zx]
+            [clojure.string :as str]
             [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -19,8 +21,8 @@
            [javax.xml.transform.dom DOMSource]
            [javax.xml.transform OutputKeys TransformerFactory]
            [javax.xml.transform.stream StreamSource StreamResult]
-           (java.nio.charset Charset)
-           (java.io Reader)))
+           [java.nio.charset Charset]
+           [java.io Reader]))
 
 ;; (println "loading miraj/markup.clj")
 ;;FIXME:  support comment nodes
@@ -76,10 +78,10 @@
        name-parts
        [nil (first name-parts)]))))
 
-(defn validate-html-rel-attval
-  [val]
-  (println "validate-html-rel-attval " val)
-  (contains? html5-link-types val))
+;; (defn validate-html-rel-attval
+;;   [val]
+;;   (println "validate-html-rel-attval " val)
+;;   (contains? html5-link-types val))
 
 (def camel-case-regex #"[a-z]*[A-Z][a-z]*") ;; FIXME: do we need a proper cc regex?
 
@@ -89,7 +91,6 @@
   ;; What about user-defined attrs?  Tough luck?
   (if (re-matches #".*[A-Z].*" (str nm))
     (throw (Exception. (str "HTML attribute names are case-insensitive; currently, only lower-case is allowed.  (This restriction will be relaxed in a later version.)  Please use clojure-case (lower-case with dashes) for {" (keyword nm) " " val "}."))))
-    ;; (throw (Exception. (str "camelCase attr names disallowed for HTML serialization.  Please use Clojure-case for " nm "."))))
   (str/replace nm #"-" ""))
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
@@ -157,7 +158,7 @@
 ;; In other words, HTML5 syntax and semantics are not uniform across
 ;; all elements.
 
-(def identity-transform-html
+(def xsl-identity-transform-html
    ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
   (str
    "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
@@ -171,7 +172,7 @@
    "</xsl:template>"
 
    "<xsl:template match='html'>"
-     "<xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html&gt;&#xA;</xsl:text>"
+     "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;&#xA;</xsl:text>"
      "&#xA;"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
@@ -219,7 +220,7 @@
    "</xsl:template>"
    "</xsl:stylesheet>"))
 
-(def identity-transform-xml
+(def xsl-identity-transform-xml
    ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
   (str
    "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
@@ -233,6 +234,57 @@
    "</xsl:template>"
    "</xsl:stylesheet>"))
 
+(def xsl-optimize-js
+  (str
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:strip-space elements='*' />"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='@*|node()'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='script'/>"
+   "<xsl:template match='script' mode='optimize'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "<xsl:template match='body' priority='99'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+       "<xsl:apply-templates select='//script' mode='optimize'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+   "</xsl:stylesheet>"))
+
+(declare parse-str)
+
+(defn xsl-xform
+  [ss elts]
+  ;; (println "xsl-xform ss: " ss)
+  ;; (println "xsl-xform doc: " elts)
+  (let [ml (do
+             (if (not (instance? miraj.markup.Element elts))
+               (do (println (type (type miraj.markup.Element)))
+                   (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))))
+             (serialize :xml elts))
+        xmlSource (StreamSource.  (StringReader. ml))
+        xmlOutput (StreamResult. (StringWriter.))
+        factory (TransformerFactory/newInstance)
+        transformer (.newTransformer factory (StreamSource. (StringReader. ss)))]
+    ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
+    ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
+    (if (.startsWith ml "<?xml")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
+
+    (.transform transformer xmlSource xmlOutput)
+    (parse-str (.toString (.getWriter xmlOutput)))))
+    ;; (.toString (.getWriter xmlOutput))))
+
 ;;FIXME: support non-tree input
 ;;FIXME: support :xhtml option
 (defn pprint-impl
@@ -245,7 +297,7 @@
             (if (keyword? (first elts))
               (throw (Exception. "only :html and :xml supported"))
               elts))
-        fmt (if (keyword? (first elts)) (first elts) :xml)
+        fmt (if (keyword? (first elts)) (first elts) :html)
         void (reset! mode fmt)
         ;; log (log/trace "mode: " @mode)
         ;; always serialize to xml, deal with html issues in the transform
@@ -259,17 +311,17 @@
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
-                     (if (.startsWith ml "<!DOCTYPE")
-                       (.write sw "<!DOCTYPE html>\n"))
+                     (if (.startsWith ml "<!doctype")
+                       (.write sw "<!doctype html>\n"))
                      sw))
         factory (TransformerFactory/newInstance)
         transformer (if (= :html @mode)
                       (do
-                        ;;(log/trace "transforming with identity-transform-html: " identity-transform-html)
-                      (.newTransformer factory (StreamSource. (StringReader. identity-transform-html))))
+                        ;;(log/trace "transforming with xsl-identity-transform-html: " xsl-identity-transform-html)
+                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
                       (do
-                        ;;(log/trace "transforming with identity-transform-xml")
-                      (.newTransformer factory (StreamSource. (StringReader. identity-transform-xml)))))]
+                        ;;(log/trace "transforming with xsl-identity-transform-xml")
+                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
     ;;                      (.newTransformer factory))]
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
@@ -304,6 +356,7 @@
       (apply pprint-impl elts))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
+  ;; (println "emit-start-tag: " (:name event))
   (let [[nspace qname] (qualified-name (:name event))]
     (.writeStartElement writer "" qname (or nspace ""))
     (write-attributes (:attrs event) writer)))
@@ -473,7 +526,12 @@
              (flatten-elements (next-events e (rest elements)))))))))
 
 (defn element [tag & [attrs & content]]
-  (let [e (Element. tag (or attrs {}) (remove nil? content))]
+  ;; (println "ELEMENT: " tag attrs content)
+  (let [e (if (= (type attrs) miraj.markup.Element)
+            (Element. tag {} (remove nil? (list attrs content)))
+            (if (map? attrs)
+              (Element. tag (or attrs {}) (remove nil? content))
+              (Element. tag {} (remove nil? (list attrs)))))]
     #_(println "E: " e)
     e))
 
@@ -710,6 +768,7 @@
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   [e ^java.io.Writer writer & {:as opts}]
+  ;; (println "emit: " e " OPTS: " opts)
   (let [^javax.xml.stream.XMLStreamWriter stream-writer
         (-> (javax.xml.stream.XMLOutputFactory/newInstance)
             (.createXMLStreamWriter writer))]
@@ -717,8 +776,9 @@
     (when (instance? java.io.OutputStreamWriter writer)
       (check-stream-encoding writer (or (:encoding opts) "UTF-8")))
 
-    (if (:doctype opts)
-      (.writeDTD stream-writer "<!DOCTYPE html>"))
+    ;; (if (:doctype opts)
+    ;;   (do (println "DOCTYPE!!!!")
+    ;;       (.writeDTD stream-writer "<!doctype html>")))
     (if (:with-xml-declaration opts)
       (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
     (doseq [event (flatten-elements [e])]
@@ -746,7 +806,7 @@
     :with-xml-declaration <bool>, default false"
   ;; [& args]
   [& elts]
-  ;; (log/trace "serialize: " elts)
+  ;; (println "serialize: " elts)
   (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
                (rest elts)
                (if (keyword? (first elts))
@@ -756,14 +816,14 @@
         ^java.io.StringWriter
         string-writer (java.io.StringWriter.)]
     (reset! mode fmt)
-    ;; (log/trace "serializing to" @mode ": " args)
-    (if (= :html (:tag (first args)))
-      (.write string-writer "<!DOCTYPE html>"))
-    ;; (log/trace "mode: " @mode)
+    ;; (println "serializing to" @mode ": " args)
     (cond
       (= @mode :html)
       (do ;(log/trace "emitting HTML: " args)
-          (emit args string-writer :html true :with-xml-declaration false))
+        (if (= :html (:tag (first args)))
+          (.write string-writer "<!doctype html>"))
+        (emit args string-writer :html true :with-xml-declaration false))
+
       (= @mode :xml)
       (do ;(log/trace "emiting XML")
           (if (= :with-xml-declaration (first args))
@@ -1035,3 +1095,23 @@
               #_(println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
 ;              )))))
 
+(defn optimize-js
+  [doc]
+  ;; (println "JS optimizer")
+   (xsl-xform xsl-optimize-js doc))
+
+  ;; (let [doc-zip (zip/xml-zip doc)]
+  ;;   (seq (-> doc-zip zip/down))
+
+  ;;   ))
+
+(defn optimize-css
+  [doc]
+   (println "CSS optimizer"))
+
+(defn optimize
+  [mode doc]
+  (case mode
+    :js (optimize-js doc)
+    :css (optimize-css doc)
+    (println "Unrecognized optimizer: " mode)))
