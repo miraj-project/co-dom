@@ -1,19 +1,23 @@
 miraj.markup
-------------
+============
 
-# usage
+link:https://github.com/mobileink/miraj.markup/tree/miraj[miraj.markup]
+is designed to provide fully functional Clojure programming of
+link:http://www.w3.org/TR/html51/[HTML5.1] and
+link:https://www.polymer-project.org/1.0/[Polymer 1.x].  It is the
+foundation layer of a more ambitious project to re-conceptualize web
+programming in a manner that integrates the traditional
+function-oriented programming model of Clojure and the
+interaction-oriented model of computation described by Robin Milner in
+link:http://www.cambridge.org/us/catalogue/catalogue.asp?isbn=0521658691[Communicating
+and Mobile Systems: The π-calculus].
 
-link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/latest-version.svg[]]
+miraj.markup is derived from
+link:https://github.com/clojure/data.xml[clojure.data.xml].  It
+extends `data.xml` to support HTML5, which is not XML; hence the name
+change.
 
-
-Original readme:
-
-# data.xml
-
-[data.xml](https://github.com/clojure/data.xml) is a Clojure library for reading and writing XML data. This
-library is the successor to
-[lazy-xml](http://clojure.github.com/clojure-contrib/lazy-xml-api.html).
-data.xml has the following features:
+Like data.xml, miraj.markup has the following features:
 
 * Parses XML documents into Clojure data structures
 * Emits XML from Clojure data structures
@@ -21,192 +25,453 @@ data.xml has the following features:
 * Uses StAX internally
 * lazy - should allow parsing and emitting of large XML documents
 
-## JDK 1.5
+In addition, miraj.markup understands HTML5 and Polymer.  It supports
+the following features:
 
-This library uses the pull parser that ships with JDK 1.6.  If you running on JDK 1.6+, you do not need any 
-additional dependencies.  If you are using JDK 1.5, you will need to include a dependency on StAX.  More 
-information on this is available [here](https://github.com/clojure/data.xml/blob/jdk16-pull-parser/jdk_15_readme.txt)
+* HTML5 <<boolattr,boolean attributes>>
 
-## Bugs
+* HTML5 <<voids,void elements>>
 
-Please report bugs using JIRA [here](http://dev.clojure.org/jira/browse/DXML).
+* HTML5 <<empties,empty elements>> are always serialized with a
+  closing tag, never as self-closing tags (e.g. `(element :script
+  {:src "foo.js"})` generates `<script src="foo.js"></script>`, never
+  `<script src="foo.js"/>`).
 
-## Installation
+* Polymer <<annotations,binding annotations>> - \[[one-way]] and {{two-way}}
 
-Latest stable release: 0.0.8
+* Functional programming of HTML apps - element constructors are functions
 
-* [All Released Versions](http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22org.clojure%22%20AND%20a%3A%22data.xml%22)
+* <<xforms,Transformations>> - miraj.markup functions generate Clojure data
+  structures (using the same Element record used by data.xml), which
+  can be manipulated just like any other Clojure data structure.
+  miraj.markup comes with one predefined transform:
 
-* [Development Snapshot Versions](https://oss.sonatype.org/index.html#nexus-search;gav~org.clojure~data.xml~~~)
+** `miraj.markup/optimize` pulls <script> elements out of the <head>
+  element and inserts them at the bottom of the page, just before the
+  closing </body> tag.
 
-### Maven
-For Maven projects, add the following XML in your `pom.xml`'s `<dependencies>` section:
+* <<cocomp,Co-compilation>> - generation of a static HTML file from miraj.markup code
 
-    <dependency>
-      <groupId>org.clojure</groupId>
-      <artifactId>data.xml</artifactId>
-      <version>0.0.8</version>
-     </dependency>
+* support for easy-to-write <<conveniences,convenience wrappers>>
 
-### Leiningen
-Add the following to the `project.clj` dependencies:
+=== [[companions]] Companion libraries
 
-    [org.clojure/data.xml "0.0.8"]
+`miraj.markup` uses the same primitive constructors as `data.xml`; for
+example, to construct `<div class="foo">bar</div>`, one writes
+`(element :div {:class "foo"} "bar")`.
 
-## Examples
+Several companion libraries provide convenience wrappers for miraj.markup:
 
-The examples below assume you have added a `use` for data.xml:
+* link:https://github.com/mobileink/miraj.html[miraj.html] - provides
+  one function per HTML5 element, so you can write `(div {:class
+  "foo") "bar")` instead of `(element :div {:class "foo"} "bar")`.
 
-    (use 'clojure.data.xml)
+* A series of `polymer` libraries that provide one function for each
+  element in the link:https://elements.polymer-project.org/[Polymer
+  catalog].  By `require`-ing these libraries with an alias you can
+  write e.g. `(paper/button)` instead of `(element :paper-button)`.
+  *CAVEAT:* the polymer libraries are still under development; only the iron,
+  paper, and neon libraries are suitable for use now, and may be
+  buggy.
 
-data.xml supports parsing and emitting XML. The parsing functions will
-read XML from a
-[Reader](http://docs.oracle.com/javase/6/docs/api/java/io/Reader.html)
-or
-[InputStream](http://docs.oracle.com/javase/6/docs/api/java/io/InputStream.html).
+** link:https://github.com/mobileink/polymer.gold[polymer.gold] - e-commerce
 
-    (let [input-xml (java.io.StringReader. "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-                                            <foo><bar><baz>The baz value</baz></bar></foo>")]
-      (parse input-xml))
+** link:https://github.com/mobileink/polymer.google[polymer.google] - Google web components
 
-    #clojure.data.xml.Element{:tag :foo,
-                              :attrs {},
-                              :content (#clojure.data.xml.Element{:tag :bar, 
-                                                                  :attrs {},
-                                                                  :content (#clojure.data.xml.Element{:tag :baz,
-                                                                                                      :attrs {},
-                                                                                                      :content ("The baz value")})})}
+** link:https://github.com/mobileink/polymer.iron[polymer.iron] - visual and non-visual utility elements
 
-The data is returned as defrecords and can be manipulated using the
-normal clojure data structure functions. Additional parsing options 
-can be passed via key pairs:
+** link:https://github.com/mobileink/polymer.paper[polymer.paper] - visual elements that implement Google's Material Design
 
-    (parse-str "<a><![CDATA[\nfoo bar\n]]><![CDATA[\nbaz\n]]></a>" :coalescing false)
-    #clojure.data.xml.Element{:tag :a, :attrs {}, :content ("\nfoo bar\n" "\nbaz\n")}
-    
-XML elements can be created using the typical defrecord constructor
-functions or the element function used below, and written using a
-[java.io.Writer](http://docs.oracle.com/javase/6/docs/api/java/io/Writer.html).:
+** link:https://github.com/mobileink/polymer.neon[polymer.neon] - special effects, i.e. animations
 
-    (let [tags (element :foo {:foo-attr "foo value"}
-                 (element :bar {:bar-attr "bar value"}
-                   (element :baz {} "The baz value")))]
-      (with-open [out-file (java.io.FileWriter. "/tmp/foo.xml")]
-        (emit tags out-file)))
+** link:https://github.com/mobileink/polymer.platinum[polymer.platinum] - "Elements to turn your web page into a true webapp, with push, offline, bluetooth and more."
 
-    ;;-> Writes XML to /tmp/foo.xml
+** link:https://github.com/mobileink/polymer.molecules[polymer.molecules] - wrapped javascript libraries.
 
-The same can also be expressed using a more Hiccup-like style of defining the elements using sexp-as-element:
+This README file documents miraj.markup only.
 
-    (= (element :foo {:foo-attr "foo value"}
-         (element :bar {:bar-attr "bar value"}
-           (element :baz {} "The baz value")))
-       (sexp-as-element
-          [:foo {:foo-attr "foo value"}
-           [:bar {:bar-attr "bar value"}
-            [:baz {} "The baz value"]]]))
-    ;;-> true
+## status
 
-Comments and CDATA can also be emitted as an S-expression with the special tag names :-cdata and :-comment:
+miraj.markup and its companion libraries are pre-alpha, proof-of-concept
+software.
 
-    (= (element :tag {:attr "value"}
-         (element :body {} (cdata "not parsed <stuff")))
-       (sexp-as-element [:tag {:attr "value"} [:body {} [:-cdata "not parsed <stuff"]]]
-    ;;-> true       
+miraj.markup is designed to generate HTML5, not to read/parse it.  But
+since it is derived from `data.xml` it should work with XML files.
+See the link:https://github.com/clojure/data.xml[clojure.data.xml]
+README for XML examples.
 
-XML can be "round tripped" through the library:
+# usage
 
-    (let [tags (element :foo {:foo-attr "foo value"}
-                 (element :bar {:bar-attr "bar value"}
-                   (element :baz {} "The baz value")))]
-      (with-open [out-file (java.io.FileWriter. "/tmp/foo.xml")]
-        (emit tags out-file))
-      (with-open [input (java.io.FileInputStream. "/tmp/foo.xml")]
-        (parse input)))
+*NOTE:*  This library uses the pull parser that ships with JDK 1.6.  If
+you running on JDK 1.6+, you do not need any additional dependencies.
+If you are using JDK 1.5, you will need to include a dependency on
+StAX.  More information on this is available
+link:https://github.com/clojure/data.xml/blob/jdk16-pull-parser/jdk_15_readme.txt[here].
 
-    #clojure.data.xml.Element{:tag :foo, :attrs {:foo-attr "foo value"}...}
+link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/latest-version.svg[]]
 
-There are also some string based functions that are useful for
-debugging.
+[source,clojure]
+----
+;; src/test.clj
+(ns test
+  (:require [miraj.markup :refer :all]))
 
-    (let [tags (element :foo {:foo-attr "foo value"}
-                 (element :bar {:bar-attr "bar value"}
-                   (element :baz {} "The baz value")))]
-      (= tags (parse-str (emit-str tags))))
+(def doc (element :html
+                  (element :head
+                           (element :meta {:name "description"
+                                           :content "miraj.markup test"})
+                           (element :script {:src "/scripts/foo.js"}))
+                  (element :body
+                           (element :h1 "Hello World"))))
 
-    true  
-    
-Indentation is supported, but should be treated as a debugging feature
-as it's likely to be pretty slow:
+(println doc)
+=> #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{...
 
-    (print (indent-str (element :foo {:foo-attr "foo value"}
-                         (element :bar {:bar-attr "bar value"}
-                           (element :baz {} "The baz value1")
-                           (element :baz {} "The baz value2")
-                           (element :baz {} "The baz value3")))))
+(println (serialize doc))
+=> <!doctype html><html><head><meta name="description" content="co-compile test"><script src="/scripts/foo.js"></script></head><body><h1>Hello World</h1></body></html>
 
-    <?xml version="1.0" encoding="UTF-8"?>
-    <foo foo-attr="foo value">
-      <bar bar-attr="bar value">
-        <baz>The baz value1</baz>
-        <baz>The baz value2</baz>
-        <baz>The baz value3</baz>
-      </bar>
-    </foo>
+(pprint doc)
+<!doctype html>
+<html>
+    <head>
+        <meta name="description" content="co-compile test">
+        <script src="/scripts/foo.js"></script>
+    </head>
+    <body>
+        <h1>Hello World</h1>
+    </body>
+</html>
+user>
 
-CDATA can be emitted:
+(println (optimize :js doc))
+=> #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{
 
-    (emit-str (element :foo {}
-                (cdata "<non><escaped><info><here>")))
+(pprint (optimize :js doc))
+<!doctype html>
+<html>
+    <head>
+        <meta name="description" content="co-compile test">
+    </head>
+    <body>
+        <h1>Hello World</h1>
+        <script src="/scripts/foo.js"></script>
+    </body>
+</html>
+;; NOTE: the script element has been moved
 
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo><![CDATA[<non><escaped><info><here>]]></foo>"
+(co-compile "resources/footest.html"
+            (optimize :js doc)
+            :pprint)
+;; resources/footest.html:
+<!doctype html>
+<html>
+    <head>
+        <meta name="description" content="co-compile test">
+    </head>
+    <body>
+        <h1>Hello World</h1>
+        <script src="/scripts/foo.js"></script>
+    </body>
+</html>
+----
 
-But will be read as regular character data:
+== API
 
-    (parse-str (emit-str (element :foo {}
-                 (cdata "<non><escaped><info><here>"))))
+Too soon to generate official API docs.  The
+link:http://clojure.github.io/data.xml/[data.xml API Reference] should
+suffice.  If you need to work with XML you should use that library
+instead of `miraj.markup`.  If you need to work with XHTML or some
+version of HTML < 5, you'll have to look elsewhere; `miraj.markup`
+only supports HTML5.  (That may change.)
 
-    #clojure.data.xml.Element{:tag :foo, :attrs {}, :content ("<non><escaped><info><here>")}
+To program HTML, all you need is `miraj.markup/element`, which works
+the same way `data.xml/element` works (although I notice the latter is
+not included in the API Reference.)  However, `miraj.markup/element`
+extends `data.xml/element` to support the following features:
 
-Comments can also be emitted:
+=== [[boolattr]] HTML5 link:http://www.w3.org/TR/html51/infrastructure.html#boolean-attributes[boolean attributes]
 
-    (emit-str (element :foo {}
-                (xml-comment "Just a <comment> goes here")
-                (element :bar {} "and another element")))
+A _boolean attribute_ is either present or absent; it is not the same
+as a _boolean-valued_ attribute, which as the name suggests is one
+whose value is boolean.  HTML5 says "The values 'true' and 'false' are
+not allowed on boolean attributes. To represent a false value, the
+attribute has to be omitted altogether."
 
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo><!--Just a <comment> goes here--><bar>and another element</bar></foo>"
+In HTML5 markup, boolean attributes do not need an attribute value; if
+a value is provided, it must be either the empty string "" or it must
+match the attribute name, e.g. `foo="foo"` or `foo=foo`.
 
-But are ignored when read:
+To express a boolean attribute in `miraj.markup`, use Clojure `nil` as
+the attribute value.  Serialization will translate {:foo nil} to a
+boolean attribute without a value assignment.  For example:
 
-    (emit-str
-      (parse-str
-        (emit-str (element :foo {}
-                    (xml-comment "Just a <comment> goes here")
-                    (element :bar {} "and another element")))))
+[source,clojure]
+----
+(element :body {:unresolved nil} ...)
+; serialization:  <body unresolved>...</body>
+----
 
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?><foo><bar>and another element</bar></foo>"    
+=== [[voids]] HTML5 link:http://www.w3.org/TR/html51/syntax.html#void-elements[void elements]
 
-Generated API docs for data.xml are available [here](http://clojure.github.com/data.xml).
+Void elements cannot have any content; they also cannot be
+"self-closing"; void elements only have a start tag.  For arcane
+reasons we need not discuss here.
+
+`miraj.markup` understands void elements; no special markup is required.
+
+[source,clojure]
+----
+(serialize (element :link {:rel "stylesheet" :href "foo.css"}))
+ ;=> <link rel="stylesheet" href="foo.css">
+----
+
+=== [[empties]] HTML5 empty elements
+
+Empty elements must not be self-closing.  `miraj.markup` understands
+this and does the right thing:
+
+[source,clojure]
+----
+(element :script {:src "foo.js"})
+; serialization: <script src="foo.js"></script>
+----
+
+
+=== attribute values
+
+With a few exceptions, clojure attribute values go through normal
+Clojure evaluation and then are serialized as strings, just as with
+`data.xml`.  You can use expressions as attribute values:
+
+[source,clojure]
+----
+(serialize (element :foo {:bar (* 2 3)})) ;=> <foo bar="6"></foo>
+----
+
+Note that evaluation (reduction) occurs as in normal function
+evaluation, so the what gets constructed on the `miraj.markup.Element`
+is the value of the expression:
+
+[source,clojure]
+----
+(element :foo {:bar (* 2 3)}) ;=> #miraj.markup.Element{:tag :foo, :attrs {:bar 6}, :content ()}
+----
+
+The exceptions are:
+
+* nil marks a boolean attribute: `(serialize (element :foo {:bar nil})) ; => <foo bar></foo>`
+
+* Polymer annotations  (see below, <<annotations,Polymer binding annotations>>)
+
+** keywords mark Polymer two-way annotations
+
+** quoted symbols mark Polymer one-way annotations (unquoted symbols are evaluated normally)
+
+* BigInt and BigDecimal end up looking like Int and Decimal (see examples below)
+
+You can still use these as attribute values by putting them in a string literal.
+
+Examples drawn from the Clojure
+link:http://clojure.org/cheatsheet[cheatsheet] (`serialize` omitted
+for brevity):
+
+[source,clojure]
+----
+(element :foo {:bar 9}) ; => <foo bar="9"></foo>
+(element :foo {:bar 9N}) ; => <foo bar="9"></foo>  (BigInt)
+(element :foo {:bar 1.0}) ; => <foo bar="1.0"></foo>
+(element :foo {:bar 1.0M}) ; => <foo bar="1.0"></foo>  (BigDecimal)
+(element :foo {:bar 1/2}) ; => <foo bar="1/2"></foo>
+(element :foo {:bar 0xFF}) ; => <foo bar="255"></foo>
+(element :foo {:bar 2r1011}) ;=> <foo bar="11"></foo>
+(element :foo {:bar 36rCrazy}) ;=> <foo bar="21429358"></foo>  (base 36)
+(element :foo {:bar -1.2e-5}) ;=> <foo bar="-1.2E-5"></foo>
+(element :foo {:bar true}) ; => <foo bar="true"></foo>
+(element :foo {:bar false}) ; => <foo bar="false"></foo>
+(element :foo {:bar (odd? 3)}) ; => <foo bar="true"></foo>
+
+(element :foo {:bar \x}) ;=> <foo bar="x"></foo>  (char literal)
+(element :foo {:bar "\377"}) ;=> <foo bar="ÿ"></foo>  (octal string literal)
+(element :foo {:bar "\ucafe"}) ;=> <foo bar="쫾"></foo> (hex unicode string literal)
+;; symbols
+(element :foo {:bar x}) Exception: x undefined symbol
+(def x "baz")
+(element :foo {:bar x}) ;=> <foo bar="baz"></foo>
+(element :foo {:bar 'x}) ;=> <foo bar="[[x]]"></foo>
+(element :foo {:bar (quote x)}) ;=> <foo bar="[[x]]"></foo>
+;; keywords
+(element :foo {:bar (keyword x)}) ;=> <foo bar="{{foo}}"></foo> (x was defined above)
+(element :foo {:bar (keyword y)}) ;=> Exception: y unresolved symbol
+(element :foo {:bar (keyword 'x)}) ;=> <foo bar="{{x}}"></foo>
+(element :foo {:bar (keyword "x")}) ;=> <foo bar="{{x}}"></foo>
+(element :foo {:bar :x}) ;=> <foo bar="{{x}}"></foo>
+----
+
+*CAVEAT:* since miraj.markup is intended for HTML5 generation,
+ functionality specific to XML has not been tested, e.g. CDATA
+ sections, processing instructions, etc.
+
+=== [[annotations]] Polymer link:https://www.polymer-project.org/1.0/docs/devguide/data-binding.html#property-binding[binding annotations]
+
+"A binding annotation consists of a property name or subproperty name
+enclosed in curly brackets ({{}}) or square brackets ([[]])."  See the
+Polymer
+link:https://www.polymer-project.org/1.0/docs/devguide/data-binding.html#property-binding[binding
+annotations] docs for details.
+
+To express a Polymer annotation in miraj.markup, use a symbol for
+one-way binding and a keyword for two-way binding:
+
+[source,clojure]
+----
+;; one-way
+(element :foo {:bar 'baz})
+; serialization: <foo bar="[[baz]]"></foo>
+;; two-way
+(element :foo {:bar :baz})
+; serialization: <foo bar="{{baz}}"></foo>
+----
+
+=== [[validation]] validation
+
+`miraj.markup` does a wee bit of validation, mostly as proof of
+concept.  For example, when it sees a `rel` attribute it checks to
+make sure its value is one of the allowed link types, so
+e.g. `(element :link {:rel "foo"}...)` will throw an exception.
+
+=== [[xforms]] transformations
+
+Since `miraj.markup` produces a Clojure data structure (tree or forest
+of `miraj.markup.Element` records), transformations can be applied.
+The library includes one transformation primitive,
+`miraj.markup/xsl-xform`, that takes an XSL stylesheet (as a string)
+and an Element structure and applies the former to the latter.  For an
+example stylesheet see `xsl-optimize-js` in the source code.
+
+It also comes with one predefined transform, `optimize` that uses
+`xsl-xform`.  Currently `optimize` takes one "strategy" keyword, :js,
+and an Element tree.  It moves all <script> elements to the bottom of
+the HTML, just before the closing </body> tag:
+
+[source,clojure]
+----
+(optimize :js my-doc)
+----
+
+=== [[cocomp]] co-compilation
+
+"Co-compilation" is a fancy way of saying "writing to a file".  What
+motivates the terminology is the conceptual re-orientation mentioned
+in the introduction.  If we think of an HTML file as a program text,
+it's a program that we generate on one machine but interpret/execute
+on another.  So the process goes roughly like this
+
+1. write the source of the program in Clojure using miraj.markup;
+2. use Clojure to compile the miraj.markup code to a JVM bytecode program
+3  execute JVM bytecode program, generating a data structure of miraj.markup.Element nodes;
+3. serialize that data structure to a string of HTML
+4. write the string to disk
+5. send the string from disk to a browser client in response to a GET request
+6. interpret and execute the string on the browser
+
+If you look at this from the right (possibly cock-eyed) angle, there
+is a dualism between (Clojure) compilation on the one hand, and the
+process of serializing, writing, sending, etc. HTML on the other.
+Just think of HTML as a kind of machine language for the BVM -
+"Browser Virtual Machine".
+
+* Compilation
+
+** is a function of the Clojure system
+
+** ordinarily occurs as part of a process that occurs on the dev's local machine
+
+** translates a program text from one (source) language (e.g. Clojure) to another
+   (machine or virtual machine) language (e.g. JVM bytecode)
+
+** saves the JVM bytecode program to a local file
+
+** the local file will later loaded and executed by a (local) OS
+
+
+* Co-compilation
+
+** is a function of the miraj.markup system
+
+** occurs on the local machine but as part of a process that is
+   inherently interactive, involving at least two different machines
+
+** translates a program text from Clojure (the miraj.markup code) to
+   another language, HTML, which can be viewed as the bytecode
+   language of the Browser Virtual Machine
+
+** saves the "BVM bytecode" (i.e. the HTML) to a local file
+
+** the local file will later be loaded and executed _by a remote browser_
+
+
+In summary, the idea is that generating HTML from miraj.markup code
+(or any other HTML DSL) is just like compiling Clojure code, with one
+major difference: when you write an HTML program, you're actually
+_co-programming_ - using programming on a local system to program a
+remote system.
+
+The intention is also to draw a clear contrast between the idea of
+_programming_ HTML and merely ingesting and emiting _documents_, which
+is characteristic of template-based approaches, XML processing, etc.
+From this perspective, an HTML page is a _program_, not a _datum_.
+
+This notion is very informal and obviously needs more work, my gut
+tells me that it would be possible to give something approaching a
+formal definition of dualism like programming/co-programming and
+compilation/co-compilation, in a way that would actually help bring
+more clarity to programming activities.  That is certainly the case
+for lots of other programming-related dualisms I've seen discussed,
+from mathematical formalisms like algebra/co-algebra,
+recursion/co-recursion, induction/co-induction, etc. to more informal
+notions like co-function, co-routine, and so forth.
+
+=== [[conveniences]] convenience wrappers
+
+If you have a specialized HTML vocabulary, perhaps using `class`
+attribution or other techniques, it's easy to write a convenience
+layer to present a friendlier API.  Wrapper functions need not map
+directly to the `element` primitive constructor syntax, of course; you
+can rewrite things.  For example, if your vocabulary makes heavy use
+of a "foo" class attribute, you can create a `foo` function such that:
+
+[source,clojure]
+----
+(myvocab/foo {:bar "baz"} ...) ;=>  <div class="foo" bar="baz">...</div>
+----
+
+See the source of the <<companions,Companion Libraries>> for examples.
+Also, link:https://github.com/mobileink/miraj.html[miraj.html] uses
+this technique to bring a little more order to the HTML <meta> tag,
+by providing, for example, some platform attributes.  So instead of
+writing:
+
+[source,html]
+----
+<meta name="apple-mobile-web-app-capable" content="yes" >
+<meta name="apple-mobile-web-app-status-bar-style" content="default" >
+<meta name="apple-mobile-web-app-title" content="My App" >
+----
+
+you can instead write:
+
+[source,clojure]
+----
+(h/apple {:mobile-web-app {:capable true
+	 		   :status-bar-style :default
+			   :title "My App"}})
+----
+
+
+## Bugs, Comments, Suggestions
+
+Open an link:https://github.com/mobileink/miraj.markup/issues[issue].
 
 ## License
 
 Licensed under the [Eclipse Public License](http://www.opensource.org/licenses/eclipse-1.0.php).
-
-## Developer Information
-
-* [GitHub project](https://github.com/clojure/data.xml)
-
-* [Bug Tracker](http://dev.clojure.org/jira/browse/DXML)
-
-* [Continuous Integration](http://build.clojure.org/job/data.xml/)
-
-* [Compatibility Test Matrix](http://build.clojure.org/job/data.xml-test-matrix/)
-
-## Contributing
-
-All contributions need to be made via patches attached to tickets in
-[JIRA](http://dev.clojure.org/jira/browse/DXML). Check the
-[Contributing to Clojure](http://clojure.org/contributing) page for
-more information.
-
-
