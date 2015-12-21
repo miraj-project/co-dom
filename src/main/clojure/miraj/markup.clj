@@ -95,7 +95,7 @@
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    ;; (log/trace "ATTR: " k " = " v " " (type v))
+    (log/trace "ATTR: " k " = " v " " (type v))
     (let [[attr-ns nm] (qualified-name k)
           attr-name (if (= :html @mode) (validate-html5-attr-name nm v) nm)
           attr-val (if (= :html @mode)
@@ -115,7 +115,8 @@
                        :else v)
                      (if (nil? v) (throw
                                    (Exception. (str "Clojure nil attribute val disallowed: {"
-                                                    k " " (pr-str v) "}"))) v))]
+                                                    k " " (pr-str v) "}")))
+                         (str v)))]
       (if attr-ns
         (.writeAttribute writer attr-ns attr-name attr-val)
         (.writeAttribute writer attr-name attr-val)))))
@@ -1115,3 +1116,11 @@
     :js (optimize-js doc)
     :css (optimize-css doc)
     (println "Unrecognized optimizer: " mode)))
+
+(defn co-compile
+  [file doc & mode]
+  (let [s (if (= (first mode) :pprint)
+            (do ;;(println "pprint")
+                (with-out-str (pprint doc)))
+            (serialize doc))]
+    (spit file s)))
