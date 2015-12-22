@@ -11,6 +11,8 @@ link:https://www.polymer-project.org/1.0/[Polymer 1.x].
 ** <<companions,companion libraries>>
 * <<status,status>>
 * <<usage,usage>>
+** <<repl,repl>>
+** <<webapp,webapp>>
 * <<api,api>>
 ** <<bools,boolean attributes>>
 ** <<voids,void elements>>
@@ -191,6 +193,8 @@ link:https://github.com/clojure/data.xml/blob/jdk16-pull-parser/jdk_15_readme.tx
 
 link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/latest-version.svg[]]
 
+=== [[repl]] repl
+
 [source,clojure]
 ----
 ;; src/test.clj
@@ -255,6 +259,10 @@ user>
     </body>
 </html>
 ----
+
+=== [[webapp]] webapp
+
+See link:https://github.com/mobileink/miraj.hello-polymer[miraj.hello-polymer]
 
 == [[api]] API
 
