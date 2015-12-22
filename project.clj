@@ -1,8 +1,7 @@
 (defproject miraj/markup "0.1.0-SNAPSHOT"
-  :description "core.data.xml fork"
-  :url "https://github.com/mobileink/data.xml"
+  :description "HTML5/Polymer in Clojure"
+  :url "https://github.com/mobileink/miraj.markup"
   :source-paths ["src/main/clojure"]
-  ;; :test-paths ["src/test/clojure"]
   :dependencies [[org.clojure/clojure "1.8.0-RC4"]
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/data.xml "0.0.8"]
