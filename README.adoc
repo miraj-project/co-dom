@@ -416,9 +416,13 @@ one-way binding and a keyword for two-way binding:
 ;; one-way
 (element :foo {:bar 'baz})
 ; serialization: <foo bar="[[baz]]"></foo>
+(element :span 'baz})
+; serialization: <span>[[baz]]</span>
 ;; two-way
 (element :foo {:bar :baz})
 ; serialization: <foo bar="{{baz}}"></foo>
+(element :span :baz)
+; serialization: <span>{{baz}}</span>
 ----
 
 === [[validation]] validation
