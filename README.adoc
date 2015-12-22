@@ -4,13 +4,52 @@ miraj.markup
 link:https://github.com/mobileink/miraj.markup/tree/miraj[miraj.markup]
 is designed to provide fully functional Clojure programming of
 link:http://www.w3.org/TR/html51/[HTML5.1] and
-link:https://www.polymer-project.org/1.0/[Polymer 1.x].  It is the
-foundation layer of a more ambitious project to re-conceptualize web
-programming in a manner that integrates the traditional
-function-oriented programming model of Clojure and the
-interaction-oriented model of computation described by Robin Milner in
+link:https://www.polymer-project.org/1.0/[Polymer 1.x].
+
+* <<motivation,motivation>>
+* <<summary,summary>>
+** <<companions,companion libraries>>
+* <<status,status>>
+* <<usage,usage>>
+* <<api,api>>
+** <<bools,boolean attributes>>
+** <<voids,void elements>>
+** <<empties,empty elements>>
+** <<attvals,attribute values>>
+** <<annots,polymer binding annotations>>
+* <<validation,validation>>
+* <<xforms,transformations>>
+* <<co-comp,co-compilation>>
+* <<conveniences,convenience wrappers>>
+* <<bugs,bugs, comments, suggestions>>
+* <<license,license>>
+
+= [[motivation]] motivation
+
+Do we really need yet another HTML-in-Clojure library?  We already
+have link:https://github.com/weavejester/hiccup[Hiccup],
+link:https://hoplon.io/[Hoplon], and various template-based libraries;
+why another one?
+
+miraj.markup is the foundation layer of a more ambitious project to
+re-conceptualize web programming (and indeed computation) in a manner
+that integrates the traditional function-oriented programming model of
+Clojure and the interaction-oriented model of computation described by
+Robin Milner in
 link:http://www.cambridge.org/us/catalogue/catalogue.asp?isbn=0521658691[Communicating
-and Mobile Systems: The π-calculus].
+and Mobile Systems: The π-calculus]:
+
+[quote]
+----
+[T]he π-calculus can be seen as a basic model of computation.  Every
+basic model rests upon a small number of primitive notions: the
+π-calculus rests upon the primitive notion of _interaction_, just as
+Turing machines and register machines rest upon the notion of reading
+and writing a storage medium, and just as recursive equations and the
+λ-calculus rest upon mathematical functions.
+----
+
+= [[summary]] summary
 
 miraj.markup is derived from
 link:https://github.com/clojure/data.xml[clojure.data.xml].  It
@@ -28,7 +67,7 @@ Like data.xml, miraj.markup has the following features:
 In addition, miraj.markup understands HTML5 and Polymer.  It supports
 the following features:
 
-* HTML5 <<boolattr,boolean attributes>>
+* HTML5 <<bools,boolean attributes>>
 
 * HTML5 <<voids,void elements>>
 
@@ -37,7 +76,7 @@ the following features:
   {:src "foo.js"})` generates `<script src="foo.js"></script>`, never
   `<script src="foo.js"/>`).
 
-* Polymer <<annotations,binding annotations>> - \[[one-way]] and {{two-way}}
+* Polymer <<annots,binding annotations>> - \[[one-way]] and {{two-way}}
 
 * Functional programming of HTML apps - element constructors are functions
 
@@ -50,7 +89,7 @@ the following features:
   element and inserts them at the bottom of the page, just before the
   closing </body> tag.
 
-* <<cocomp,Co-compilation>> - generation of a static HTML file from miraj.markup code
+* <<co-comp,Co-compilation>> - generation of a static HTML file from miraj.markup code
 
 * support for easy-to-write <<conveniences,convenience wrappers>>
 
@@ -94,7 +133,7 @@ Several companion libraries provide convenience wrappers for miraj.markup:
 
 This README file documents miraj.markup only.
 
-## status
+= [[status]] status
 
 miraj.markup and its companion libraries are pre-alpha, proof-of-concept
 software.
@@ -104,7 +143,7 @@ since it is derived from `data.xml` it should work with XML files.
 See the link:https://github.com/clojure/data.xml[clojure.data.xml]
 README for XML examples.
 
-# usage
+= [[usage]] usage
 
 *NOTE:*  This library uses the pull parser that ships with JDK 1.6.  If
 you running on JDK 1.6+, you do not need any additional dependencies.
@@ -179,7 +218,7 @@ user>
 </html>
 ----
 
-== API
+== [[api]] API
 
 Too soon to generate official API docs.  The
 link:http://clojure.github.io/data.xml/[data.xml API Reference] should
@@ -193,7 +232,7 @@ the same way `data.xml/element` works (although I notice the latter is
 not included in the API Reference.)  However, `miraj.markup/element`
 extends `data.xml/element` to support the following features:
 
-=== [[boolattr]] HTML5 link:http://www.w3.org/TR/html51/infrastructure.html#boolean-attributes[boolean attributes]
+=== [[bools]] HTML5 link:http://www.w3.org/TR/html51/infrastructure.html#boolean-attributes[boolean attributes]
 
 A _boolean attribute_ is either present or absent; it is not the same
 as a _boolean-valued_ attribute, which as the name suggests is one
@@ -241,7 +280,7 @@ this and does the right thing:
 ----
 
 
-=== attribute values
+=== [[attvals]] attribute values
 
 With a few exceptions, clojure attribute values go through normal
 Clojure evaluation and then are serialized as strings, just as with
@@ -315,7 +354,7 @@ for brevity):
  functionality specific to XML has not been tested, e.g. CDATA
  sections, processing instructions, etc.
 
-=== [[annotations]] Polymer link:https://www.polymer-project.org/1.0/docs/devguide/data-binding.html#property-binding[binding annotations]
+=== [[annots]] Polymer link:https://www.polymer-project.org/1.0/docs/devguide/data-binding.html#property-binding[binding annotations]
 
 "A binding annotation consists of a property name or subproperty name
 enclosed in curly brackets ({{}}) or square brackets ([[]])."  See the
@@ -362,7 +401,7 @@ the HTML, just before the closing </body> tag:
 (optimize :js my-doc)
 ----
 
-=== [[cocomp]] co-compilation
+=== [[co-comp]] co-compilation
 
 "Co-compilation" is a fancy way of saying "writing to a file".  What
 motivates the terminology is the conceptual re-orientation mentioned
@@ -474,10 +513,10 @@ you can instead write:
 ----
 
 
-## Bugs, Comments, Suggestions
+== [[bugs]] Bugs, Comments, Suggestions
 
 Open an link:https://github.com/mobileink/miraj.markup/issues[issue].
 
-## License
+== [[license]] License
 
 Licensed under the [Eclipse Public License](http://www.opensource.org/licenses/eclipse-1.0.php).
