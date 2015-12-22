@@ -9,8 +9,8 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
-  (:require [clojure.string :as str]
-            [clojure.tools.logging :as log :only [trace debug error info]])
+  (:require [clojure.string :as str])
+            ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
                              XMLStreamReader
@@ -93,7 +93,7 @@
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    (log/trace "ATTR: " k " = " v " " (type v))
+    ;; (log/trace "ATTR: " k " = " v " " (type v))
     (let [[attr-ns nm] (qualified-name k)
           attr-name (if (= :html @mode) (validate-html5-attr-name nm v) nm)
           attr-val (if (= :html @mode)
