@@ -74,6 +74,8 @@ Several companion libraries provide convenience wrappers for miraj.markup:
   paper, and neon libraries are suitable for use now, and may be
   buggy.
 
+** link:https://github.com/mobileink/polymer.dom[polymer.dom] - dom-repeat, dom-if, dom-bind, dom-module
+
 ** link:https://github.com/mobileink/polymer.gold[polymer.gold] - e-commerce
 
 ** link:https://github.com/mobileink/polymer.google[polymer.google] - Google web components
@@ -430,6 +432,8 @@ for lots of other programming-related dualisms I've seen discussed,
 from mathematical formalisms like algebra/co-algebra,
 recursion/co-recursion, induction/co-induction, etc. to more informal
 notions like co-function, co-routine, and so forth.
+
+(Actually, cross-compilation is probably the better term.)
 
 === [[conveniences]] convenience wrappers
 
