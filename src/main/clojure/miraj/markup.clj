@@ -28,7 +28,7 @@
 (defonce mode (atom nil))
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
 
-(def html5-void-elt-tags
+(def html5-void-elts
   #{"area" "base" "br" "col"
    "embed" "hr" "img" "input"
    "keygen" "link" "meta" "param"
@@ -178,7 +178,7 @@
      "</xsl:copy>"
    "</xsl:template>"
 
-   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elt-tags) "\">"  ;;*[.='']\">"
+   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elts) "\">"  ;;*[.='']\">"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
        "VOID"
@@ -375,7 +375,7 @@
     ;;(.writeEndElement writer)
     (.write writer (str
                     (if (= @mode :html)
-                      (if (contains? html5-void-elt-tags t)
+                      (if (contains? html5-void-elts t)
                         "VOID"))
                     "</" t ">"))))
 
@@ -796,7 +796,6 @@
     (apply emit e sw opts)
     (.toString sw)))
 
-;;FIXME - support :link arg, to generate <link...> for co-fns
 (defn serialize
   "Serializes the Element to String and returns it.
    Options:
