@@ -84,6 +84,8 @@ Several companion libraries provide convenience wrappers for miraj.markup:
 
 ** link:https://github.com/mobileink/polymer.paper[polymer.paper] - visual elements that implement Google's Material Design
 
+** link:https://github.com/mobileink/polymer.paper.input[polymer.paper.input] - paper input elements
+
 ** link:https://github.com/mobileink/polymer.neon[polymer.neon] - special effects, i.e. animations
 
 ** link:https://github.com/mobileink/polymer.platinum[polymer.platinum] - "Elements to turn your web page into a true webapp, with push, offline, bluetooth and more."
