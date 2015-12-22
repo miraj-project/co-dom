@@ -44,6 +44,7 @@
 (def html5-link-types
   #{:alternate :archives :author :bookmark :dns-prefetch :external :first
     :help :icon :index :last :license :next :no-follow :no-referrer :ping-back
+    :import ;; non-standard but needed for polymer TODO: log a warning
     :preconnect :prefetch :preload :prerender :prev
     :search :stylesheet :sidebar :tag :up})
 
