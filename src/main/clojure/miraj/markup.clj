@@ -88,13 +88,14 @@
   [nm val]
   ;;FIXME: allow for HTML attrnames that do use "-", e.g. data-*, dns-prefetch, etc.
   ;; What about user-defined attrs?  Tough luck?
-  (if (re-matches #".*[A-Z].*" (str nm))
-    (throw (Exception. (str "HTML attribute names are case-insensitive; currently, only lower-case is allowed.  (This restriction will be relaxed in a later version.)  Please use clojure-case (lower-case with dashes) for {" (keyword nm) " " val "}."))))
-  (str/replace nm #"-" ""))
+  ;; (if (re-matches #".*[A-Z].*" (str nm))
+  ;;   (throw (Exception. (str "HTML attribute names are case-insensitive; currently, only lower-case is allowed.  (This restriction will be relaxed in a later version.)  Please use clojure-case (lower-case with dashes) for {" (keyword nm) " " val "}."))))
+  #_(str/replace nm #"-" "")
+  (str nm))
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    ;; (log/trace "ATTR: " k " = " v " " (type v))
+    ;; (println "ATTR: " k " = " v " " (type v))
     (let [[attr-ns nm] (qualified-name k)
           attr-name (if (= :html @mode) (validate-html5-attr-name nm v) nm)
           attr-val (if (= :html @mode)
@@ -1048,7 +1049,7 @@
   [typ tags]
   (do ;;(println "make-resource-fns: " typ tags)
         (doseq [[fn-tag elt-tag elt-uri docstring] tags]
-          (do ;(println "make resource:" fn-tag elt-tag elt-uri)
+          (do (println "make resource:" fn-tag elt-tag elt-uri docstring)
               (eval `(defn ~fn-tag ~docstring
                        [& args#]
 ;;                       (println "invoking " ~fn-tag)
