@@ -1,7 +1,7 @@
 (ns test
   (:require [miraj.markup :refer :all]
             [miraj.html :as h]
-            [clojure.data.xml :as x]))
+            #_[clojure.data.xml :as x]))
 
 (def doc (element :html
                   (element :head
