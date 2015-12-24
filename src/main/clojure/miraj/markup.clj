@@ -9,6 +9,7 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
+  (:refer-clojure :exclude [require]) 
   (:require [clojure.string :as str])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
@@ -269,8 +270,8 @@
   ;; (println "xsl-xform doc: " elts)
   (let [ml (do
              (if (not (instance? miraj.markup.Element elts))
-               (do (println (type (type miraj.markup.Element)))
-                   (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))))
+               (do (println (type elts))
+                   (throw (Exception. "xml-xform only works on clojure.data.xml.Element"))))
              (serialize :xml elts))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -527,12 +528,12 @@
              (flatten-elements (next-events e (rest elements)))))))))
 
 (defn element [tag & [attrs & content]]
-  ;; (println "ELEMENT: " tag attrs content)
+  ;;(println "ELEMENT: " tag attrs content)
   (let [e (if (= (type attrs) miraj.markup.Element)
-            (Element. tag {} (remove nil? (list attrs content)))
+            (Element. tag {} (remove nil? (apply list attrs content)))
             (if (map? attrs)
-              (Element. tag (or attrs {}) (remove nil? content))
-              (Element. tag {} (remove nil? (list attrs)))))]
+              (Element. tag (or attrs {}) (flatten (remove nil? content)))
+              (Element. tag {} (remove nil? (apply list attrs)))))]
     #_(println "E: " e)
     e))
 
@@ -934,7 +935,7 @@
           fn-validator (fnext tag+validator)
           elt (keyword fn-tag)
           ;; log (println "make-meta-tag-fn fn-tag: " fn-tag)
-          ;; log (println "make-meta-tag-fn elt-tag: " elt)
+          ;; log (println "make-meta-tag-fn elt-kw: " elt)
           func `(defn ~fn-tag ;; (symbol (str tag))
                   [& fn-args#]
                   ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
@@ -1034,7 +1035,7 @@
                                          htags#)
                               func# (with-meta (apply element ~elt attrs# content#)
                                       {:co-fn true
-                                       :elt-tag ~elt
+                                       :elt-kw ~elt
                                        :elt-uri "foo/bar"})]
                           ;; (log/trace "htags: " htags#)
                           ;; (log/trace "elt: " ~elt)
@@ -1048,18 +1049,18 @@
 (defn make-resource-fns
   [typ tags]
   (do ;;(println "make-resource-fns: " typ tags)
-        (doseq [[fn-tag elt-tag elt-uri docstring] tags]
-          (do (println "make resource:" fn-tag elt-tag elt-uri docstring)
+        (doseq [[fn-tag elt-kw elt-uri docstring] tags]
+          (do #_(println "make resource:" fn-tag elt-kw elt-uri docstring)
               (eval `(defn ~fn-tag ~docstring
                        [& args#]
 ;;                       (println "invoking " ~fn-tag)
                        (let [elt# (if (empty? args#)
-                                    (with-meta (element ~elt-tag)
+                                    (with-meta (element ~elt-kw)
                                       {:miraj
                                        {:co-fn true
                                         :co-type ~typ
                                         :doc ~docstring
-                                        :elt-tag ~elt-tag
+                                        :elt-kw ~elt-kw
                                         :elt-uri ~elt-uri}})
 
                                     (let [attrib-args# (first args#)
@@ -1077,11 +1078,11 @@
                                                        args#
                                                        (rest args#))
                                                      args#)]
-                                      (with-meta (apply element ~elt-tag attrs# content#)
+                                      (with-meta (apply element ~elt-kw attrs# content#)
                                         {:miraj {:co-fn true
                                                  :co-type ~typ
                                                  :doc ~docstring
-                                                 :elt-tag ~elt-tag
+                                                 :elt-kw ~elt-kw
                                                  :elt-uri ~elt-uri}})))]
                          elt#)))
               (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
@@ -1090,7 +1091,7 @@
                             {:miraj {:co-fn true
                                      :co-type typ
                                      :doc docstring
-                                     :elt-tag elt-tag
+                                     :elt-kw elt-kw
                                      :elt-uri elt-uri}})
               #_(println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
 ;              )))))
@@ -1123,3 +1124,156 @@
                 (with-out-str (pprint doc)))
             (serialize doc))]
     (spit file s)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;FIXME: do we really want polymer stuff in here?
+(def polymer-nss #{"iron" "paper" "google" "gold" "neon" "platinum" "font" "molecules"})
+
+(defn get-href
+  ([pfx sfx]
+   ;; (log/trace "get-href: " pfx " - " sfx (type sfx))
+   (let [pfx (str/split (str pfx) #"\.")
+         hd (first pfx)]
+     ;; (log/trace "get-href pxf: " pfx)
+     (cond
+       (= hd "polymer")
+       (let [pns (second pfx)]
+         (if (not (contains? polymer-nss pns))
+           (throw (RuntimeException. (str "unsupported namespace: " pns " | " pfx " | " polymer-nss))))
+         (if sfx
+           (cond
+             (and (= pns "paper") (= sfx 'textarea))
+             (do ;;(log/trace "TEXTAREA!!!!!!!!!!!!!!!!")
+               (str "polymer/paper-input/paper-textarea.html"))
+
+             (= pns "font") (str hd "/" pns "-" sfx "/" sfx ".html")
+             :else (str hd "/" pns "-" sfx "/" pns "-" sfx ".html"))
+           (str hd "/" pns "-elements.html")))
+       :else
+       (str (str/join "/" pfx) "/" sfx))))
+  ([sym]
+  ;; (log/trace "get-href: " pfx " - " sfx (type sfx))
+  (let [pfx (str/split (namespace sym) #"\.")
+        sfx (name sym)
+         hd (first pfx)]
+    ;; (log/trace "get-href pxf: " pfx)
+    (cond
+      (= hd "polymer")
+      (let [pns (second pfx)]
+        (if (not (contains? polymer-nss pns))
+          (throw (RuntimeException. (str "unsupported namespace: " pns " | " pfx " | " polymer-nss))))
+        (if sfx
+          (cond
+            (and (= pns "paper") (= sfx 'textarea))
+            (do ;;(log/trace "TEXTAREA!!!!!!!!!!!!!!!!")
+                (str "polymer/paper-input/paper-textarea.html"))
+
+            (= pns "font") (str hd "/" pns "-" sfx "/" sfx ".html")
+            :else (str hd "/" pns "-" sfx "/" pns "-" sfx ".html"))
+          (str hd "/" pns "-elements.html")))
+      :else
+      (str (str/join "/" pfx) "/" sfx)))))
+
+(defmulti get-resource-elt
+  (fn [typ nsp sym uri]
+    (println (str "GET-RESOURCE-elt: " type " " nsp " " sym))
+    typ))
+
+(defmethod get-resource-elt :default
+  [typ nsp sym uri]
+  (println (str "get-resource-elt default: " type " " nsp " " sym))
+  (element :link
+           {:rel "import" :href uri}))
+  ;;(get-href (ns-name nsp) ref)}))
+
+(defmethod get-resource-elt :link
+  [typ nsp sym uri]
+  (element :link
+           {:rel "import" :href (get-href (ns-name nsp) ref)}))
+
+(defmethod get-resource-elt :css
+  [typ nsp sym uri]
+  (println "get-resource-elt js: " (str type " " nsp " " sym))
+  (element :link {:rel "stylesheet" :href uri}))
+
+(defmethod get-resource-elt :js
+  [typ nsp sym uri]
+  (println "get-resource-elt js: " (str type " " nsp " " sym))
+  (element :script {:href uri}))
+
+(defn get-link
+  [comp]
+  (println (str "get-link: " comp))
+  (let [nsp (find-ns (first comp))
+        options (apply hash-map (rest comp))
+        as-opt (:as options)
+        refer-opts (:refer options)
+        _ (println "component ns: " nsp (meta nsp))]
+    (if (nil? refer-opts)
+      (element :link
+               {:rel "import" :href (get-href nsp nil)})
+      (for [ref refer-opts]
+        (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
+              _ (println "ref meta: " (meta (find-var ref-sym)))
+              ns-type (:resource-type (meta nsp))
+              ref-type (:resource-type (meta (find-var ref-sym)))
+              ref-uri (deref (find-var ref-sym))
+              _ (println "ref uri: " ref-uri)
+              _ (println "ref type: " ns-type (type ns-type))]
+          (get-resource-elt ns-type nsp ref-sym ref-uri))))))
+
+(def xsl-normalize
+  (str
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:strip-space elements='*' />"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='html' priority='99'>"
+     "<xsl:copy>"
+       "<head>"
+         "<xsl:apply-templates select='link|script|style' mode='head'/>"
+       "</head>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='@*|node()'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='link'/>"
+   "<xsl:template match='link' mode='head'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='script'/>"
+   "<xsl:template match='script' mode='head'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='body//link' priority='99' mode='head'/>"
+   "</xsl:stylesheet>"))
+
+(defn normalize
+  "inspect args, if necessary create <head> etc."
+  [& args]
+  (println "HTML args: " args)
+  (let [m (meta (first args))
+        _ (println "META " m)
+        h (apply xsl-xform xsl-normalize args)]
+    h))
+
+;; (require [[polymer.paper :as paper :refer [button card]]])
+(defn require
+  [& args]
+  (flatten
+   (for [arg args]
+     (do
+       (clojure.core/require arg)
+       (flatten (get-link arg))))))
