@@ -9,7 +9,7 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
-  (:refer-clojure :exclude [require]) 
+  (:refer-clojure :exclude [require])
   (:require [clojure.string :as str])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
@@ -62,6 +62,8 @@
    :sizes :sizes
    :target :_
    :type :mime})
+
+(defn kw->nm [kw] (subs (str kw) 1))
 
 ; Represents a parse event.
 ; type is one of :start-element, :end-element, or :characters
@@ -1099,7 +1101,9 @@
 (defn optimize-js
   [doc]
   ;; (println "JS optimizer")
-   (xsl-xform xsl-optimize-js doc))
+  (with-meta
+    (xsl-xform xsl-optimize-js doc)
+    (meta doc)))
 
   ;; (let [doc-zip (zip/xml-zip doc)]
   ;;   (seq (-> doc-zip zip/down))
@@ -1176,7 +1180,7 @@
 
 (defmulti get-resource-elt
   (fn [typ nsp sym uri]
-    (println (str "GET-RESOURCE-elt: " type " " nsp " " sym))
+    #_(println (str "GET-RESOURCE-elt: " type " " nsp " " sym))
     typ))
 
 (defmethod get-resource-elt :default
@@ -1192,34 +1196,39 @@
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :css
+;; FIXME: support all attribs
   [typ nsp sym uri]
-  (println "get-resource-elt js: " (str type " " nsp " " sym))
-  (element :link {:rel "stylesheet" :href uri}))
+  #_(println "get-resource-elt css: " (str type " " nsp " " sym " " uri))
+  (element :link {:rel "stylesheet" :href (:uri uri)
+                  :media (if (:media uri) (:media uri) "all")}))
 
 (defmethod get-resource-elt :js
+;;FIXME support all attribs
   [typ nsp sym uri]
-  (println "get-resource-elt js: " (str type " " nsp " " sym))
+  ;; (println "get-resource-elt js: " (str type " " nsp " " sym))
   (element :script {:href uri}))
 
-(defn get-link
+(defn get-requirement
   [comp]
-  (println (str "get-link: " comp))
+  ;; (println (str "get-requirement: " comp))
   (let [nsp (find-ns (first comp))
         options (apply hash-map (rest comp))
         as-opt (:as options)
         refer-opts (:refer options)
-        _ (println "component ns: " nsp (meta nsp))]
+        ;; _ (println "component ns: " nsp (meta nsp))
+        ]
     (if (nil? refer-opts)
       (element :link
                {:rel "import" :href (get-href nsp nil)})
       (for [ref refer-opts]
         (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-              _ (println "ref meta: " (meta (find-var ref-sym)))
+              ;; _ (println "ref meta: " (meta (find-var ref-sym)))
               ns-type (:resource-type (meta nsp))
               ref-type (:resource-type (meta (find-var ref-sym)))
               ref-uri (deref (find-var ref-sym))
-              _ (println "ref uri: " ref-uri)
-              _ (println "ref type: " ns-type (type ns-type))]
+              ;; _ (println "ref uri: " ref-uri)
+              ;; _ (println "ref type: " ns-type (type ns-type))
+              ]
           (get-resource-elt ns-type nsp ref-sym ref-uri))))))
 
 (def xsl-normalize
@@ -1263,11 +1272,18 @@
 (defn normalize
   "inspect args, if necessary create <head> etc."
   [& args]
-  (println "HTML args: " args)
-  (let [m (meta (first args))
-        _ (println "META " m)
-        h (apply xsl-xform xsl-normalize args)]
-    h))
+  ;; (println "HTML args: " (first args))
+  (let [h (apply xsl-xform xsl-normalize args)
+        ;;TODO iterate over metas, adding <meta> elts
+        meta-elts (for [[k v] (meta (first args))]
+                    (element :meta {:name (kw->nm k)
+                                    :content (str v)}))]
+    ;; (println "METAs " meta-elts)
+    (list (update (first args)
+                  :content
+                  (fn [content]
+                                 (concat meta-elts content))))))
+;;    h))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
 (defn require
@@ -1276,4 +1292,63 @@
    (for [arg args]
      (do
        (clojure.core/require arg)
-       (flatten (get-link arg))))))
+       (flatten (get-requirement arg))))))
+
+;; <!-- import the shared styles  -->
+;; <link rel="import" href="../shared-styles/foo.html">
+;; <!-- include the shared styles -->
+;; <style is="custom-style" include="foo-style"></style>
+;; <style is="custom-style" include="bar-style"></style>
+;; etc.
+
+(defn get-import
+  [import]
+  (println (str "get-import: " import))
+  (println (str "ns: " (first import) " " (type (first import))))
+  (let [nsp (first import)]
+    (clojure.core/require nsp)
+    (let [import-ns (find-ns nsp)
+          _ (println "import ns: " import-ns)
+          uri (deref (find-var
+                      (symbol (str (ns-name import-ns)) "uri")))
+          _ (println "uri: " uri)
+          styles (rest import)
+        ]
+      (concat
+       (list (element :link {:rel "import" :href uri}))
+       (for [style styles]
+         (do (println "style name: " style)
+             (let [style-sym (symbol
+                              (str (ns-name import-ns)) (str style))
+                   _ (println "style-sym: " style-sym)
+                   style-ref (deref (find-var style-sym))]
+               (println "style ref: " style-ref)
+               (element :style {:is "custom-style"
+                                :include style}))))))))
+
+  ;;   (println "style ns: " nsp)))
+  ;;   (doseq [style styles]
+  ;;     (println "style: " style))))
+  ;;   (if (nil? refer-opts)
+  ;;     (element :link
+  ;;              {:rel "import" :href (get-href nsp nil)})
+  ;;     (for [ref refer-opts]
+  ;;       (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
+  ;;             ;; _ (println "ref meta: " (meta (find-var ref-sym)))
+  ;;             ns-type (:resource-type (meta nsp))
+  ;;             ref-type (:resource-type (meta (find-var ref-sym)))
+  ;;             ref-uri (deref (find-var ref-sym))
+  ;;             ;; _ (println "ref uri: " ref-uri)
+  ;;             ;; _ (println "ref type: " ns-type (type ns-type))
+  ;;             ]
+  ;;         (get-resource-elt ns-type nsp ref-sym ref-uri))))))
+
+;; (import '(shared.styles.foo fooa-style foob-style)
+;;         '(shared.styles.bar bara-style barb-style)))
+
+
+(defn import
+  [& args]
+  (println "import: " args)
+  (for [arg args]
+    (do (get-import arg))))
