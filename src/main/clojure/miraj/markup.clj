@@ -1240,7 +1240,7 @@
    "<xsl:template match='html' priority='99'>"
      "<xsl:copy>"
        "<head>"
-         "<xsl:apply-templates select='link|script|style' mode='head'/>"
+         "<xsl:apply-templates select='link|style|meta' mode='head'/>"
        "</head>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -1252,19 +1252,19 @@
      "</xsl:copy>"
    "</xsl:template>"
 
-   "<xsl:template match='link'/>"
-   "<xsl:template match='link' mode='head'>"
+   "<xsl:template match='link|style|meta'/>"
+   "<xsl:template match='link|style|meta' mode='head'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
 
-   "<xsl:template match='script'/>"
-   "<xsl:template match='script' mode='head'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
+   ;; "<xsl:template match='script'/>"
+   ;; "<xsl:template match='script' mode='head'>"
+   ;;   "<xsl:copy>"
+   ;;     "<xsl:apply-templates select='@*|node()'/>"
+   ;;   "</xsl:copy>"
+   ;; "</xsl:template>"
 
    "<xsl:template match='body//link' priority='99' mode='head'/>"
    "</xsl:stylesheet>"))
@@ -1273,17 +1273,16 @@
   "inspect args, if necessary create <head> etc."
   [& args]
   ;; (println "HTML args: " (first args))
-  (let [h (apply xsl-xform xsl-normalize args)
-        ;;TODO iterate over metas, adding <meta> elts
-        meta-elts (for [[k v] (meta (first args))]
+  (let [meta-elts (for [[k v] (meta (first args))]
                     (element :meta {:name (kw->nm k)
-                                    :content (str v)}))]
-    ;; (println "METAs " meta-elts)
-    (list (update (first args)
-                  :content
-                  (fn [content]
-                                 (concat meta-elts content))))))
-;;    h))
+                                    :content (str v)}))
+        h (list
+           (update (first args)
+                   :content
+                   (fn [content] (concat meta-elts content))))
+        normh (apply xsl-xform xsl-normalize h)
+        ]
+    normh))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
 (defn require
@@ -1303,26 +1302,26 @@
 
 (defn get-import
   [import]
-  (println (str "get-import: " import))
-  (println (str "ns: " (first import) " " (type (first import))))
+  ;; (println (str "get-import: " import))
+  ;; (println (str "ns: " (first import) " " (type (first import))))
   (let [nsp (first import)]
     (clojure.core/require nsp)
     (let [import-ns (find-ns nsp)
-          _ (println "import ns: " import-ns)
+          ;; _ (println "import ns: " import-ns)
           uri (deref (find-var
                       (symbol (str (ns-name import-ns)) "uri")))
-          _ (println "uri: " uri)
+          ;; _ (println "uri: " uri)
           styles (rest import)
         ]
       (concat
        (list (element :link {:rel "import" :href uri}))
        (for [style styles]
-         (do (println "style name: " style)
+         (do #_(println "style name: " style)
              (let [style-sym (symbol
                               (str (ns-name import-ns)) (str style))
-                   _ (println "style-sym: " style-sym)
+                   ;; _ (println "style-sym: " style-sym)
                    style-ref (deref (find-var style-sym))]
-               (println "style ref: " style-ref)
+               ;; (println "style ref: " style-ref)
                (element :style {:is "custom-style"
                                 :include style}))))))))
 
@@ -1349,6 +1348,6 @@
 
 (defn import
   [& args]
-  (println "import: " args)
+  ;; (println "import: " args)
   (for [arg args]
     (do (get-import arg))))
