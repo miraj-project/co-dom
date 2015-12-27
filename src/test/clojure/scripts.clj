@@ -8,3 +8,4 @@
 
 ;; http://materializecss.com/getting-started.html
 (def materialize "js/materialize.min.js")
+             (fn [m] (assoc m :co-ns true :resource-type :js)))

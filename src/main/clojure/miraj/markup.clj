@@ -9,7 +9,7 @@
 (ns ^{:doc "derived from clojure.data.xml"
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
-  (:refer-clojure :exclude [require])
+  (:refer-clojure :exclude [import require])
   (:require [clojure.string :as str])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
@@ -100,7 +100,9 @@
   (doseq [[k v] attrs]
     ;; (println "ATTR: " k " = " v " " (type v))
     (let [[attr-ns nm] (qualified-name k)
-          attr-name (if (= :html @mode) (validate-html5-attr-name nm v) nm)
+          attr-name (if (= :html @mode)
+                      (validate-html5-attr-name nm v)
+                      (str nm))
           attr-val (if (= :html @mode)
                      (cond
                        (= :rel k) (if (contains? html5-link-types
@@ -116,10 +118,7 @@
                        ;; (empty? v) miraj-boolean-tag
                        (nil? v) miraj-boolean-tag
                        :else (str v))
-                     (if (nil? v) (throw
-                                   (Exception. (str "Clojure nil attribute val disallowed: {"
-                                                    k " " (pr-str v) "}")))
-                         (str v)))]
+                     (str v))]
       (if attr-ns
         (.writeAttribute writer attr-ns attr-name attr-val)
         (.writeAttribute writer attr-name attr-val)))))
@@ -1115,11 +1114,12 @@
    (println "CSS optimizer"))
 
 (defn optimize
-  [mode doc]
-  (case mode
+  [strategy doc]
+  (reset! mode :html)
+  (case strategy
     :js (optimize-js doc)
     :css (optimize-css doc)
-    (println "Unrecognized optimizer: " mode)))
+    (println "Unrecognized optimizer: " strategy)))
 
 (defn co-compile
   [file doc & mode]
@@ -1135,7 +1135,7 @@
 
 (defn get-href
   ([pfx sfx]
-   ;; (log/trace "get-href: " pfx " - " sfx (type sfx))
+   ;;(log/trace "get-href: " pfx " - " sfx (type sfx))
    (let [pfx (str/split (str pfx) #"\.")
          hd (first pfx)]
      ;; (log/trace "get-href pxf: " pfx)
@@ -1179,57 +1179,71 @@
       (str (str/join "/" pfx) "/" sfx)))))
 
 (defmulti get-resource-elt
-  (fn [typ nsp sym uri]
-    #_(println (str "GET-RESOURCE-elt: " type " " nsp " " sym))
+  (fn [typ nsp sym #_uri]
+    (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
     typ))
 
 (defmethod get-resource-elt :default
-  [typ nsp sym uri]
-  (println (str "get-resource-elt default: " type " " nsp " " sym))
+  [typ nsp sym #_uri]
+  (println
+   (str "get-resource-elt :default: " typ " " nsp " " sym))
   (element :link
-           {:rel "import" :href uri}))
-  ;;(get-href (ns-name nsp) ref)}))
+           {:rel "import" :href (get-href (ns-name nsp) ref)}))
+  ;; (element :link {:rel "import" :href uri}))
+
+(defmethod get-resource-elt :polymer
+  [typ nsp sym #_uri]
+  (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
+  (let [pfx (:resource-pfx (meta nsp))
+        path (:elt-uri (:miraj (meta (find-var sym))))
+        uri (str pfx "/" path)]
+    (print "meta: " (meta (find-var sym)))
+    (print "miraj: " (keys (meta (find-var sym))))
+    (print "uri: " uri)
+    (element :link {:rel "import" :href uri})))
+
+  ;; (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :link
-  [typ nsp sym uri]
+  [typ nsp sym #_uri]
+  (println "get-resource-elt :link: " (str typ " " nsp " " sym))
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :css
 ;; FIXME: support all attribs
-  [typ nsp sym uri]
-  #_(println "get-resource-elt css: " (str type " " nsp " " sym " " uri))
+  [typ nsp sym #_uri]
+  (println "get-resource-elt :css: " (str typ " " nsp " " sym))
+  (let [uri (deref (find-var sym))]
   (element :link {:rel "stylesheet" :href (:uri uri)
-                  :media (if (:media uri) (:media uri) "all")}))
+                  :media (if (:media uri) (:media uri) "all")})))
 
 (defmethod get-resource-elt :js
 ;;FIXME support all attribs
-  [typ nsp sym uri]
-  ;; (println "get-resource-elt js: " (str type " " nsp " " sym))
-  (element :script {:href uri}))
+  [typ nsp sym #_uri]
+  (println "get-resource-elt :js: " (str typ " " nsp " " sym))
+  (element :script {:href (deref (find-var sym))}))
 
 (defn get-requirement
   [comp]
-  ;; (println (str "get-requirement: " comp))
+  (println (str "get-requirement: " comp))
   (let [nsp (find-ns (first comp))
         options (apply hash-map (rest comp))
         as-opt (:as options)
         refer-opts (:refer options)
-        ;; _ (println "component ns: " nsp (meta nsp))
+        _ (println "component ns: " nsp (meta nsp))
         ]
     (if (nil? refer-opts)
       (element :link
                {:rel "import" :href (get-href nsp nil)})
       (for [ref refer-opts]
         (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-              ;; _ (println "ref meta: " (meta (find-var ref-sym)))
+              _ (println "ref sym: " ref-sym)
+              _ (println "ref meta: " (meta (find-var ref-sym)))
               ns-type (:resource-type (meta nsp))
-              ref-type (:resource-type (meta (find-var ref-sym)))
-              ref-uri (deref (find-var ref-sym))
-              ;; _ (println "ref uri: " ref-uri)
-              ;; _ (println "ref type: " ns-type (type ns-type))
+              _ (println "ns-type: " ns-type)
               ]
-          (get-resource-elt ns-type nsp ref-sym ref-uri))))))
+          (get-resource-elt ns-type nsp ref-sym #_ref-uri))))))
 
 (def xsl-normalize
   (str
@@ -1272,26 +1286,54 @@
 (defn normalize
   "inspect args, if necessary create <head> etc."
   [& args]
-  ;; (println "HTML args: " (first args))
+  (println "HTML args: " args)
+  (println "HTML meta: " (meta args))
+  (reset! mode :html)
   (let [meta-elts (for [[k v] (meta (first args))]
                     (element :meta {:name (kw->nm k)
                                     :content (str v)}))
         h (list
            (update (first args)
                    :content
-                   (fn [content] (concat meta-elts content))))
+                   (fn [content]
+                     (if (meta args)
+                       (concat meta-elts content)
+                       content))))
         normh (apply xsl-xform xsl-normalize h)
         ]
     normh))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
-(defn require
+(defmacro require
   [& args]
-  (flatten
-   (for [arg args]
-     (do
-       (clojure.core/require arg)
-       (flatten (get-requirement arg))))))
+  (doseq [arg args]
+    (eval
+     (macroexpand
+      `(do (println "REQUIRING: " ~arg)
+           (clojure.core/require ~arg)))))
+  (println "FOO: ")
+  `(do
+     (println "REQUIRing: " [~@args])
+     (for [arg# [~@args]]
+       (do (println "GET-REQ: " arg#)
+           ;; (list (element :FOO))))))
+           (let [r# (get-requirement arg#)]
+             (println "REQRES: " r#)
+             r#)))))
+           ;;   (element :foo))))))
+
+;;             (first r#))))))
+
+;    (element :foo)))
+
+;;  `(clojure.core/require ~@args))
+
+  ;; `(flatten
+  ;;   (for [arg# ~args]
+  ;;     (do
+  ;;       (println REQUIRING: " arg#)
+  ;;       (clojure.core/require arg#)
+  ;;       (flatten (get-requirement arg#))))))
 
 ;; <!-- import the shared styles  -->
 ;; <link rel="import" href="../shared-styles/foo.html">
@@ -1302,19 +1344,24 @@
 
 (defn get-import
   [import]
-  ;; (println (str "get-import: " import))
-  ;; (println (str "ns: " (first import) " " (type (first import))))
-  (let [nsp (first import)]
+  (println (str "get-import: " import))
+  (println (str "ns: " (first import) " " (type (first import))))
+  (let [nsp (first import)
+        styles (rest import)]
     (clojure.core/require nsp)
     (let [import-ns (find-ns nsp)
-          ;; _ (println "import ns: " import-ns)
+          _ (println "import ns: " import-ns)
+          _ (println "import ns meta: " (meta import-ns))
+
+;; dispatch to impl based on type meta of config spec
+
           uri (deref (find-var
                       (symbol (str (ns-name import-ns)) "uri")))
-          ;; _ (println "uri: " uri)
-          styles (rest import)
+          _ (println "uri: " uri)
         ]
       (concat
        (list (element :link {:rel "import" :href uri}))
+       ;; SHARED STYLES!
        (for [style styles]
          (do #_(println "style name: " style)
              (let [style-sym (symbol
@@ -1346,8 +1393,8 @@
 ;;         '(shared.styles.bar bara-style barb-style)))
 
 
-(defn import
+(defmacro import
   [& args]
-  ;; (println "import: " args)
+  (println "import: " args)
   (for [arg args]
-    (do (get-import arg))))
+    `(do (get-import ~arg))))

@@ -54,7 +54,7 @@
 ;;    "source" "track" "wbr"})
 
 (deftest ^:html void-1
-    (is (= html5-void-elt-tags
+    (is (= html5-void-elts
            #{"area" "base" "br" "col" "embed" "hr" "img" "input"
              "keygen" "link" "meta" "param" "source" "track" "wbr"})))
 

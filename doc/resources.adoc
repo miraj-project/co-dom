@@ -1,0 +1,11 @@
+resources
+=========
+
+
+    (miraj.markup/require '[polymer.paper :as paper :refer [button card]])
+
+    ;; `require` does:
+    ;;     1. lookup referred names in namespace (e.g. find polymer.paper/button etc.)
+    ;;     2. pull uri from referred name metadata
+    ;;     3. write <link> element
+    ;;     4. side-effect: loads namespace, obviating need to require lib in ns decl above

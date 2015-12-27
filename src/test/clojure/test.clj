@@ -1,5 +1,5 @@
 (ns test
-  (:require [miraj.markup :refer :all :exclude [normalize]]
+  (:require ;;[miraj.markup :refer :all :exclude [normalize]]
             [miraj.html :as h]
             [clojure.tools.namespace.repl :refer [refresh]]
             ;; [polymer.paper]
@@ -10,14 +10,25 @@
   (miraj.markup/optimize :js
   (with-meta
     (h/html
-     (h/script {:src "foo.js"})
-     (h/style {:href "foo.css"})
-     (require '[scripts :refer [jquery materialize]]
+     (h/require '[polymer.paper :as paper :refer [button]]
+              '[scripts :refer [jquery materialize]]
               '[styles  :refer [foo bar]])
-     (import '(styles.shared.foo fooa foob)
-             '(styles.shared.bar bara barb))
-     (h/body (h/h1 "hello")))
-    {:title "hello" :description "foo" :base "http://foo"}))))
+     (h/import '(styles.shared.foo fooa foob)
+               '(styles.shared.bar bara barb))
+
+     (h/body (h/h1 "hello")
+             (paper/button "foo")))
+
+    {:title "hello" :description "foo" :base "http://foo"
+     :platform
+     {:apple {:touch
+              {:icon "images/touch/apple-touch-icon.png"}}}}))))
+
+;; we support literal script and style elts:
+;; (h/script {:src "foo.js"})
+;; (h/style {:href "foo.css"})
+;; but the recommended practice is to use h/require with a config
+;; namespace.
 
 
 ;; <!-- import the shared styles  -->
