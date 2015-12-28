@@ -1180,12 +1180,12 @@
       (str (str/join "/" pfx) "/" sfx)))))
 
 (defmulti get-resource-elt
-  (fn [typ nsp sym #_uri]
+  (fn [typ nsp sym spec]
     (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
     typ))
 
 (defmethod get-resource-elt :default
-  [typ nsp sym #_uri]
+  [typ nsp sym spec]
   (println
    (str "get-resource-elt :default: " typ " " nsp " " sym))
   (element :link
@@ -1193,7 +1193,7 @@
   ;; (element :link {:rel "import" :href uri}))
 
 (defmethod get-resource-elt :polymer
-  [typ nsp sym]
+  [typ nsp sym spec]
   (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
   (let [pfx (:resource-pfx (meta nsp))
         path (:elt-uri (:miraj (meta (find-var sym))))
@@ -1201,19 +1201,27 @@
     (print "meta: " (meta (find-var sym)))
     (print "miraj: " (keys (meta (find-var sym))))
     (print "uri: " uri)
-    (element :link {:rel "import" :href uri})))
+    (let [iores (if-let [res (io/resource uri)]
+                  res (throw (Exception.
+                              (str/join "\n"
+                                        ["Polymer resource: "
+                                         (str \tab uri)
+                                         "not found in classpath; referenced by 'require' spec:"
+                                         (str \tab spec \newline)]))))
+          _ (println "IO RES: " iores)]
+      (element :link {:rel "import" :href uri}))))
 
   ;; (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :link
-  [typ nsp sym #_uri]
+  [typ nsp sym spec]
   (println "get-resource-elt :link: " (str typ " " nsp " " sym))
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :css
 ;; FIXME: support all attribs
-  [typ nsp sym #_uri]
+  [typ nsp sym spec]
   (println "get-resource-elt :css: " (str typ " " nsp " " sym))
   (let [uri (deref (find-var sym))]
   (element :link {:rel "stylesheet" :href (:uri uri)
@@ -1221,13 +1229,13 @@
 
 (defmethod get-resource-elt :js
 ;;FIXME support all attribs
-  [typ nsp sym #_uri]
+  [typ nsp sym spec]
   (println "get-resource-elt :js: " (str typ " " nsp " " sym))
   (element :script {:href (deref (find-var sym))}))
 
-(defn get-requirement
+(defn require-resource
   [comp]
-  (println (str "get-requirement: " comp))
+  (println (str "require-resource: " comp))
   (let [nsp (find-ns (first comp))
         options (apply hash-map (rest comp))
         as-opt (:as options)
@@ -1245,7 +1253,7 @@
               ns-type (:resource-type (meta nsp))
               _ (println "ns-type: " ns-type)
               ]
-          (get-resource-elt ns-type nsp ref-sym #_ref-uri))))))
+          (get-resource-elt ns-type nsp ref-sym comp))))))
 
 (def xsl-normalize
   (str
@@ -1318,7 +1326,7 @@
      (println "REQUIRing: " [~@args])
      (let [reqs# (for [arg# [~@args]]
                   (do (println "GET-REQ: " arg#)
-                      (let [r# (get-requirement arg#)]
+                      (let [r# (require-resource arg#)]
                         (println "REQRES: " r#)
                         r#)))]
        (println "REQUIRed: " reqs#)
@@ -1336,7 +1344,7 @@
   ;;     (do
   ;;       (println REQUIRING: " arg#)
   ;;       (clojure.core/require arg#)
-  ;;       (flatten (get-requirement arg#))))))
+  ;;       (flatten (require-resource arg#))))))
 
 ;; <!-- import the shared styles  -->
 ;; <link rel="import" href="../shared-styles/foo.html">
@@ -1376,12 +1384,44 @@
                     uri (:uri style-ref)
                     _ (println "uri: " uri)
                     iores (if-let [res (io/resource uri)]
-                            res (throw (Exception. (str "CSS resource not found in classpath: " uri "; referenced by 'import' spec:b
- " spec))))
-                    _ (println "IO RES: " iores)
-                    rsrc (slurp (io/file (io/resource uri)))]
-                (println "RESOURCE: " rsrc)
+                            res (throw (Exception. (str "CSS resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))
+                    _ (println "IO RES: " iores)]
+                    ;; rsrc (slurp (io/file (io/resource uri)))]
+                ;; (println "RESOURCE: " rsrc)
                 (element :style {:rel "stylesheet"
+                                 :href uri}))))]
+  result))
+
+(defn validate-js-resource
+  [uri spec]
+  (if (.startsWith uri "http")
+    true
+    (if-let [res (io/resource uri)]
+      res (throw (Exception. (str "Javascript resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))))
+
+(defmethod import-resource :js
+  [typ spec]
+  (println "import-resource :js: " typ spec)
+  (let [nsp (first spec)
+        import-ns (find-ns nsp)
+        _ (println "import ns: " import-ns)
+        _ (println "import ns meta: " (meta import-ns))
+        resource-type (:resource-type (meta import-ns))
+        scripts (rest spec)
+        _ (println "scripts : " scripts)
+        result
+        (for [script scripts]
+          (do (println "script name: " script)
+              (let [script-sym (symbol
+                               (str (ns-name import-ns)) (str script))
+                    _ (println "script-sym: " script-sym)
+                    script-ref (deref (find-var script-sym))
+                    _ (println "script ref: " script-ref)
+                    uri (:uri script-ref)
+                    _ (println "uri: " uri)
+                    iores (validate-js-resource uri spec)
+                    _ (println "IO RES: " iores)]
+                (element :script {:rel "import"
                                  :href uri}))))]
   result))
 

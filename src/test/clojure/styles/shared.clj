@@ -5,7 +5,7 @@
                      :co-ns true
                      :resource-type :polymer-style-module)))
 
-(def uri "shared-styles/foo.html")
+(def uri "styles/shared/foo.html")
 
 (def foo "foo-style") ;; foo-style is in foo.html
 

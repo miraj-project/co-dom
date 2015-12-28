@@ -16,3 +16,6 @@ E.g. so it supports HTML5 and possibly other markup/down languages.
 ** link:https://code.google.com/p/markdown4j/[markdown4j]
 ** etc.
 
+
+* resource validation: extend to support files located off of
+  classpath

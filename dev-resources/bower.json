@@ -1,0 +1,26 @@
+{
+  "name": "markup-dev",
+  "homepage": "https://github.com/mobileink/miraj.markup",
+  "authors": [
+    "Gregg Reynolds <reynolds-gregg@norc.org>"
+  ],
+  "description": "",
+  "main": "",
+  "moduleType": [],
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "normalize-css": "normalize.css#~3.0.3",
+    "Materialize": "materialize#~0.97.5",
+    "paper-button": "PolymerElements/paper-button#~1.0.11",
+    "iron-icon": "PolymerElements/iron-icon#~1.0.7",
+    "iron-pages": "PolymerElements/iron-pages#~1.0.5"
+  }
+}

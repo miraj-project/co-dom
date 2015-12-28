@@ -10,13 +10,12 @@
   (miraj.markup/optimize :js
 ;;  (with-meta
     (h/html
-     (h/require '[polymer.paper :as paper :refer [button]]
+     (h/require '[polymer.paper :as paper :refer [button fab]]
                 '[polymer.iron :as iron :refer [icon pages]])
-                ;; '[scripts :refer [jquery materialize]]
-                ;; '[styles  :refer [foo bar]])
-     (h/import #_(styles.shared.foo fooa foob)
-               '(styles.shared foo bar)
-               '(styles foo bar))
+     (h/import '(styles.shared foo bar)
+               '(styles foo bar normalize)
+               ;; '(styles.materialize)
+               '(scripts jquery))
      (h/body (h/h1 "hello")
              (paper/button "foo")
              (iron/list)
