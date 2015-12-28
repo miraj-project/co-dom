@@ -10,7 +10,8 @@
       :author "Gregg Reynolds, Chris Houser"}
   miraj.markup
   (:refer-clojure :exclude [import require])
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [clojure.java.io :as io])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -1364,13 +1365,7 @@
         resource-type (:resource-type (meta import-ns))
         styles (rest spec)
         _ (println "styles : " styles)
-        ;; uri (deref (find-var
-        ;;             (symbol (str (ns-name import-ns)) "uri")))
-        ;; _ (println "uri: " uri)
         result
-        ;; (concat
-        ;;  (list (element :link {:rel "import" :href uri}))
-         ;; SHARED STYLES!
         (for [style styles]
           (do (println "style name: " style)
               (let [style-sym (symbol
@@ -1378,7 +1373,14 @@
                     _ (println "style-sym: " style-sym)
                     style-ref (deref (find-var style-sym))
                     _ (println "style ref: " style-ref)
-                    uri (:uri style-ref)]
+                    uri (:uri style-ref)
+                    _ (println "uri: " uri)
+                    iores (if-let [res (io/resource uri)]
+                            res (throw (Exception. (str "CSS resource not found in classpath: " uri "; referenced by 'import' spec:b
+ " spec))))
+                    _ (println "IO RES: " iores)
+                    rsrc (slurp (io/file (io/resource uri)))]
+                (println "RESOURCE: " rsrc)
                 (element :style {:rel "stylesheet"
                                  :href uri}))))]
   result))
@@ -1393,9 +1395,14 @@
         resource-type (:resource-type (meta import-ns))
         styles (rest spec)
         _ (println "styles : " styles)
-        uri (deref (find-var
-                    (symbol (str (ns-name import-ns)) "uri")))
+        style-sym (symbol (str (ns-name import-ns)) "uri")
+        _ (println "style sym: " style-sym)
+        uri (deref (find-var style-sym))
         _ (println "uri: " uri)
+
+        iores (if-let [res (io/resource uri)]
+                res (throw (Exception. (str "Polymer style module resource '" uri "' not found in classpath; referenced by var 'uri' in ns '" nsp "' specified by import arg " spec " => " ))))
+
         result
         (concat
          (list (element :link {:rel "import" :href uri}))
