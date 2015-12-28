@@ -1415,12 +1415,13 @@
   [import]
   (println (str "get-import: " import))
   (println (str "ns: " (first import) " " (type (first import))))
-  (let [nsp (first import)
-        import-ns (find-ns nsp)
-        resource-type (:resource-type (meta import-ns))]
-    (println "import ns: " nsp)
+  (let [nsp (first import)]
     (clojure.core/require nsp)
-      (import-resource resource-type import)))
+    (let [import-ns (find-ns nsp)
+          resource-type (:resource-type (meta import-ns))]
+    (println "import ns: " nsp (meta nsp))
+    (println "import resource type: " resource-type)
+    (import-resource resource-type import))))
 
 (defmacro import
   [& args]

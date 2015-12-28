@@ -1,5 +1,5 @@
 (ns test
-  (:require ;;[miraj.markup :refer :all :exclude [normalize]]
+  (:require [miraj.markup :refer :all :exclude [normalize]]
             [miraj.html :as h]
             [clojure.tools.namespace.repl :refer [refresh]]
             ;; [polymer.paper]
