@@ -5,24 +5,28 @@
             ;; [polymer.paper]
             #_[clojure.data.xml :as x]))
 
-(pprint
+(h/pprint
  (miraj.markup/normalize
   (miraj.markup/optimize :js
-  (with-meta
+;;  (with-meta
     (h/html
      (h/require '[polymer.paper :as paper :refer [button]]
-              '[scripts :refer [jquery materialize]]
-              '[styles  :refer [foo bar]])
-     (h/import '(styles.shared.foo fooa foob)
-               '(styles.shared.bar bara barb))
+                '[polymer.iron :as iron :refer [icon pages]])
+                ;; '[scripts :refer [jquery materialize]]
+                ;; '[styles  :refer [foo bar]])
+     (h/import #_(styles.shared.foo fooa foob)
+               '(styles.shared foo bar)
+               #_(styles.shared.bar bara barb))
 
      (h/body (h/h1 "hello")
-             (paper/button "foo")))
+             (paper/button "foo")
+             (iron/list)
+             (iron/icon {:icon "menu"}))))))
 
-    {:title "hello" :description "foo" :base "http://foo"
-     :platform
-     {:apple {:touch
-              {:icon "images/touch/apple-touch-icon.png"}}}}))))
+    ;; {:title "hello" :description "foo" :base "http://foo"
+    ;;  :platform
+    ;;  {:apple {:touch
+    ;;           {:icon "images/touch/apple-touch-icon.png"}}}})))
 
 ;; we support literal script and style elts:
 ;; (h/script {:src "foo.js"})

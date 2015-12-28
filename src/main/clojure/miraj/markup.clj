@@ -1192,7 +1192,7 @@
   ;; (element :link {:rel "import" :href uri}))
 
 (defmethod get-resource-elt :polymer
-  [typ nsp sym #_uri]
+  [typ nsp sym]
   (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
   (let [pfx (:resource-pfx (meta nsp))
         path (:elt-uri (:miraj (meta (find-var sym))))
@@ -1238,8 +1238,9 @@
                {:rel "import" :href (get-href nsp nil)})
       (for [ref refer-opts]
         (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-              _ (println "ref sym: " ref-sym)
-              _ (println "ref meta: " (meta (find-var ref-sym)))
+              _ (println "refsym: " ref-sym)
+              _ (println "refsym meta: " (meta (find-var ref-sym)))
+              _ (println "nsp meta: " (meta nsp))
               ns-type (:resource-type (meta nsp))
               _ (println "ns-type: " ns-type)
               ]
@@ -1314,12 +1315,13 @@
   (println "FOO: ")
   `(do
      (println "REQUIRing: " [~@args])
-     (for [arg# [~@args]]
-       (do (println "GET-REQ: " arg#)
-           ;; (list (element :FOO))))))
-           (let [r# (get-requirement arg#)]
-             (println "REQRES: " r#)
-             r#)))))
+     (let [reqs# (for [arg# [~@args]]
+                  (do (println "GET-REQ: " arg#)
+                      (let [r# (get-requirement arg#)]
+                        (println "REQRES: " r#)
+                        r#)))]
+       (println "REQUIRed: " reqs#)
+       reqs#)))
            ;;   (element :foo))))))
 
 ;;             (first r#))))))
@@ -1348,6 +1350,8 @@
   (println (str "ns: " (first import) " " (type (first import))))
   (let [nsp (first import)
         styles (rest import)]
+    (println "import ns: " nsp)
+    (println "import styles: " styles (type styles))
     (clojure.core/require nsp)
     (let [import-ns (find-ns nsp)
           _ (println "import ns: " import-ns)
@@ -1358,43 +1362,38 @@
           uri (deref (find-var
                       (symbol (str (ns-name import-ns)) "uri")))
           _ (println "uri: " uri)
-        ]
-      (concat
-       (list (element :link {:rel "import" :href uri}))
-       ;; SHARED STYLES!
-       (for [style styles]
-         (do #_(println "style name: " style)
+
+          result
+          (concat
+           (list (element :link {:rel "import" :href uri}))
+           ;; SHARED STYLES!
+           (for [style styles]
+             (do #_(println "style name: " style)
              (let [style-sym (symbol
                               (str (ns-name import-ns)) (str style))
-                   ;; _ (println "style-sym: " style-sym)
+                   _ (println "style-sym: " style-sym)
                    style-ref (deref (find-var style-sym))]
                ;; (println "style ref: " style-ref)
                (element :style {:is "custom-style"
-                                :include style}))))))))
-
-  ;;   (println "style ns: " nsp)))
-  ;;   (doseq [style styles]
-  ;;     (println "style: " style))))
-  ;;   (if (nil? refer-opts)
-  ;;     (element :link
-  ;;              {:rel "import" :href (get-href nsp nil)})
-  ;;     (for [ref refer-opts]
-  ;;       (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-  ;;             ;; _ (println "ref meta: " (meta (find-var ref-sym)))
-  ;;             ns-type (:resource-type (meta nsp))
-  ;;             ref-type (:resource-type (meta (find-var ref-sym)))
-  ;;             ref-uri (deref (find-var ref-sym))
-  ;;             ;; _ (println "ref uri: " ref-uri)
-  ;;             ;; _ (println "ref type: " ns-type (type ns-type))
-  ;;             ]
-  ;;         (get-resource-elt ns-type nsp ref-sym ref-uri))))))
-
-;; (import '(shared.styles.foo fooa-style foob-style)
-;;         '(shared.styles.bar bara-style barb-style)))
-
+                                :include style})))))]
+      result)))
 
 (defmacro import
   [& args]
   (println "import: " args)
-  (for [arg args]
-    `(do (get-import ~arg))))
+  ;; (for [arg args]
+    ;; `(do
+    ;;    (println "IMPORTing: " ~arg)
+    ;;    (let [imports# (get-import ~arg)]
+    ;;      (println "IMPORTed: " imports#)
+    ;;      imports#))))
+
+    `(do
+       (println "IMPORTING: " [~@args])
+       (let [reqs# (for [arg# [~@args]]
+                     (do (println "GET-IMP: " arg#)
+                         (let [r# (get-import arg#)]
+                           (println "REQRES: " r#)
+                           r#)))]
+         (println "IMPORTed: " reqs#)
+         reqs#)))
