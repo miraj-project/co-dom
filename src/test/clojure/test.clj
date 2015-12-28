@@ -16,8 +16,7 @@
                 ;; '[styles  :refer [foo bar]])
      (h/import #_(styles.shared.foo fooa foob)
                '(styles.shared foo bar)
-               #_(styles.shared.bar bara barb))
-
+               '(styles foo bar))
      (h/body (h/h1 "hello")
              (paper/button "foo")
              (iron/list)

@@ -1344,39 +1344,83 @@
 ;; <style is="custom-style" include="bar-style"></style>
 ;; etc.
 
+(defmulti import-resource
+  (fn [typ spec]
+    (println (str "IMPORT-RESOURCE: " typ " " spec))
+    typ))
+
+(defmethod import-resource :default
+  [typ spec]
+  (println "import-resource :default: " typ spec)
+  (element :FAKEELEMENT))
+
+(defmethod import-resource :css
+  [typ spec]
+  (println "import-resource :css: " typ spec)
+  (let [nsp (first spec)
+        import-ns (find-ns nsp)
+        _ (println "import ns: " import-ns)
+        _ (println "import ns meta: " (meta import-ns))
+        resource-type (:resource-type (meta import-ns))
+        styles (rest spec)
+        _ (println "styles : " styles)
+        ;; uri (deref (find-var
+        ;;             (symbol (str (ns-name import-ns)) "uri")))
+        ;; _ (println "uri: " uri)
+        result
+        ;; (concat
+        ;;  (list (element :link {:rel "import" :href uri}))
+         ;; SHARED STYLES!
+        (for [style styles]
+          (do (println "style name: " style)
+              (let [style-sym (symbol
+                               (str (ns-name import-ns)) (str style))
+                    _ (println "style-sym: " style-sym)
+                    style-ref (deref (find-var style-sym))
+                    _ (println "style ref: " style-ref)
+                    uri (:uri style-ref)]
+                (element :style {:rel "stylesheet"
+                                 :href uri}))))]
+  result))
+
+(defmethod import-resource :polymer-style-module
+  [type spec]
+  (println "import-resource :polymer-style-module: " spec)
+  (let [nsp (first spec)
+        import-ns (find-ns nsp)
+        _ (println "import ns: " import-ns)
+        _ (println "import ns meta: " (meta import-ns))
+        resource-type (:resource-type (meta import-ns))
+        styles (rest spec)
+        _ (println "styles : " styles)
+        uri (deref (find-var
+                    (symbol (str (ns-name import-ns)) "uri")))
+        _ (println "uri: " uri)
+        result
+        (concat
+         (list (element :link {:rel "import" :href uri}))
+         ;; SHARED STYLES!
+         (for [style styles]
+           (do #_(println "style name: " style)
+               (let [style-sym (symbol
+                                (str (ns-name import-ns)) (str style))
+                     _ (println "style-sym: " style-sym)
+                     style-ref (deref (find-var style-sym))]
+                 ;; (println "style ref: " style-ref)
+                 (element :style {:is "custom-style"
+                                  :include style})))))]
+    result))
+
 (defn get-import
   [import]
   (println (str "get-import: " import))
   (println (str "ns: " (first import) " " (type (first import))))
   (let [nsp (first import)
-        styles (rest import)]
+        import-ns (find-ns nsp)
+        resource-type (:resource-type (meta import-ns))]
     (println "import ns: " nsp)
-    (println "import styles: " styles (type styles))
     (clojure.core/require nsp)
-    (let [import-ns (find-ns nsp)
-          _ (println "import ns: " import-ns)
-          _ (println "import ns meta: " (meta import-ns))
-
-;; dispatch to impl based on type meta of config spec
-
-          uri (deref (find-var
-                      (symbol (str (ns-name import-ns)) "uri")))
-          _ (println "uri: " uri)
-
-          result
-          (concat
-           (list (element :link {:rel "import" :href uri}))
-           ;; SHARED STYLES!
-           (for [style styles]
-             (do #_(println "style name: " style)
-             (let [style-sym (symbol
-                              (str (ns-name import-ns)) (str style))
-                   _ (println "style-sym: " style-sym)
-                   style-ref (deref (find-var style-sym))]
-               ;; (println "style ref: " style-ref)
-               (element :style {:is "custom-style"
-                                :include style})))))]
-      result)))
+      (import-resource resource-type import)))
 
 (defmacro import
   [& args]
