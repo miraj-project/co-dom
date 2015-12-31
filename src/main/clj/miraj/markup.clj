@@ -273,7 +273,7 @@
    "<xsl:template match='head'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='optimize'/>"
-       "<xsl:apply-templates select='script' mode='polyfill'/>"
+       "<xsl:apply-templates select='.//script' mode='polyfill'/>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
@@ -294,8 +294,8 @@
 
    ;; (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"})
    "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>"
-   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize'/>"
-   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill'>"
+   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize' priority='99'/>"
+   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill' priority='99'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -1275,7 +1275,7 @@
 ;;FIXME support all attribs
   [typ nsp sym #_uri]
   (println "get-resource-elt :js: " (str typ " " nsp " " sym))
-  (element :script {:href (deref (find-var sym))}))
+  (element :script {:src (deref (find-var sym))}))
 
 (defn get-requirement
   [comp]
@@ -1752,7 +1752,7 @@
                       (let [script-ref (deref (find-var script-sym))
                             _ (println "script ref: " script-ref)
                             uri (:uri script-ref)]
-                        (element :script {:href uri})))))))]
+                        (element :script {:src uri})))))))]
   result))
 
 (defmethod import-resource :polymer-style-module
