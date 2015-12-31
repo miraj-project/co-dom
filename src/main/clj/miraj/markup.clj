@@ -272,7 +272,7 @@
   (let [ml (do
              (if (not (instance? miraj.markup.Element elts))
                (do (println (type elts))
-                   (throw (Exception. "xml-xform only works on clojure.data.xml.Element"))))
+                   (throw (Exception. "xsl-xform only works on clojure.data.xml.Element"))))
              (serialize :xml elts))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -1099,7 +1099,7 @@
 
 (defn optimize-js
   [doc]
-  ;; (println "JS optimizer")
+  ;; (println "JS optimizer: " doc)
   (with-meta
     (xsl-xform xsl-optimize-js doc)
     (meta doc)))
@@ -1114,12 +1114,19 @@
    (println "CSS optimizer"))
 
 (defn optimize
-  [strategy doc]
+  ;;FIXME handle null strategy correctly
+  [strategy & doc]
+  ;; (println "optimize: " strategy " :: " doc)
   (reset! mode :html)
   (case strategy
-    :js (optimize-js doc)
-    :css (optimize-css doc)
-    (println "Unrecognized optimizer: " strategy)))
+    :js (apply optimize-js doc)
+    :css (apply optimize-css doc)
+    (if (keyword? strategy)
+      (throw (Exception. (str "Unrecognize optimization strategy: " strategy)))
+      (if (nil? doc)
+        (optimize-js strategy)
+        (optimize-js doc)))))
+;;    (println "Unrecognized optimizer: " strategy)))
 
 (defn co-compile
   [file doc & mode]
