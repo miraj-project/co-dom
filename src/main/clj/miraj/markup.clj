@@ -261,9 +261,18 @@
 ;; the first script tag in your document's <head>.
 (def xsl-optimize-js
   (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' >"
    "<xsl:strip-space elements='*' />"
    "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='html'>"
+     "<xsl:if test='not(head)'>"
+       "<xsl:message terminate='yes'>OPTIMIZE-JS ERROR: &lt;head> not found; did you forget to run normalize first?</xsl:message>"
+     "</xsl:if>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
 
    "<xsl:template match='@*|node()'>"
      "<xsl:copy>"
@@ -287,7 +296,7 @@
    "</xsl:template>"
 
    "<xsl:template match='script'/>"
-   "<xsl:template match='script' mode='optimize'>"
+   "<xsl:template match='script' mode='optimize' prioritize='99'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -1233,6 +1242,7 @@
       :else
       (str (str/join "/" pfx) "/" sfx)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmulti get-resource-elt
   (fn [typ nsp sym spec]
     (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
@@ -1291,6 +1301,7 @@
   [comp]
   (println (str "require-resource: " comp))
   (let [nsp (find-ns (first comp))
+        _ (println "nsp: " nsp)
         options (apply hash-map (rest comp))
         as-opt (:as options)
         refer-opts (:refer options)
@@ -1305,8 +1316,10 @@
               _ (println "refsym meta: " (meta (find-var ref-sym)))
               _ (println "nsp meta: " (meta nsp))
               ns-type (:resource-type (meta nsp))
+              _ (println "nsp: " nsp)
               _ (println "ns-type: " ns-type)
               ]
+          (println "FOOB")
           (get-resource-elt ns-type nsp ref-sym comp))))))
 
 (def xsl-normalize
@@ -1497,22 +1510,6 @@
          html5-meta-attribs-standard html5-meta-attribs-extended html5-miraj-meta-attribs))
          ;; apple-meta-tags ms-meta-tags))
 
-(def html5-pragma-directives
-  "meta http-equiv pragma directives
-  http://www.w3.org/html/wg/drafts/html/master/semantics.html#pragma-directives"
-  ["http-equiv"
-   ;; {fn-name [elt-tag <validation rule>]}
-  {:content-language ["content-language" {:non-conforming "Authors are
-  encouraged to use the lang attribute instead."}]
-   :content-type ["content-type" :encoding-decl]
-   :default-style ["default-style" :string]
-   :refresh ["refresh" :refresh-syntax]
-   :set-cookie ["set-cookie" {:non-conforming "Real HTTP headers should be used instead."}]
-   ;; HTML 5.1
-   :content-security-policy ["Content-Security-Policy" :string]
-   ;; :x-ua-compatible
-   }])
-
 (defn do-viewport
   [tag key val ruleset]
       ;; :viewport {:width :device
@@ -1698,9 +1695,9 @@
      (let [reqs# (for [arg# [~@args]]
                   (do (println "GET-REQ: " arg#)
                       (let [r# (require-resource arg#)]
-                        (println "REQRES: " r#)
+                        (doall r#)
                         r#)))]
-       (println "REQUIRed: " reqs#)
+       (doall reqs#)
        reqs#)))
            ;;   (element :foo))))))
 
@@ -1749,7 +1746,9 @@
           (do (println "style name: " style)
               (let [style-sym (symbol (str (ns-name import-ns)) (str style))
                     _ (println "style-sym: " style-sym)
-                    style-ref (deref (find-var style-sym))
+                    style-ref (if-let [sref (find-var style-sym)]
+                                (deref sref)
+                                (throw (Exception. (str "CSS resource '" style-sym "' not found; referenced by 'import' spec: " spec))))
                     _ (println "style ref: " style-ref)
                     uri (:uri style-ref)
                     _ (println "uri: " uri)
@@ -1768,38 +1767,6 @@
                                          :href uri})))))))]
   result))
 
-;; (defmethod import-resource :js
-;;   [typ spec]
-;;   (println "import-resource :js: " typ spec)
-;;   (let [nsp (first spec)
-;;         import-ns (find-ns nsp)
-;;         _ (println "import ns: " import-ns)
-;;         _ (println "import ns meta: " (meta import-ns))
-;;         resource-type (:resource-type (meta import-ns))
-;;         scripts (rest spec)
-;;         _ (println "scripts : " scripts)
-;;         ;; uri (deref (find-var
-;;         ;;             (symbol (str (ns-name import-ns)) "uri")))
-;;         ;; _ (println "uri: " uri)
-;;         result
-;;         ;; (concat
-;;         ;;  (list (element :link {:rel "import" :href uri}))
-;;          ;; SHARED STYLES!
-;;         (for [script scripts]
-;;           (do (println "script name: " script)
-;;               (let [script-sym (symbol (str (ns-name import-ns)) (str script))
-;;                     _ (println "script-sym: " script-sym)
-;;                     script-var (resolve script-sym)]
-;;                 (if (nil? script-var)
-;;                   (throw (Exception. (str "Script '" script "' not found in namespace '" nsp "'")))
-;;                   (do (println "script var: " script-var)
-;;                       (let [script-ref (deref (find-var script-sym))
-;;                             _ (println "script ref: " script-ref)
-;;                             uri (:uri script-ref)]
-;;                         (element :script {:src uri})))))))]
-;; >>>>>>> c379cbc38407042ab623e0883694ab6a5ac540f1:src/main/clj/miraj/markup.clj
-;;   result))
-
 (defn validate-js-resource
   [uri spec]
   (if (.startsWith uri "http")
@@ -1817,21 +1784,23 @@
         resource-type (:resource-type (meta import-ns))
         scripts (rest spec)
         _ (println "scripts : " scripts)
-        result
-        (for [script scripts]
-          (do (println "script name: " script)
-              (let [script-sym (symbol
-                               (str (ns-name import-ns)) (str script))
-                    _ (println "script-sym: " script-sym)
-                    script-ref (deref (find-var script-sym))
-                    _ (println "script ref: " script-ref)
-                    uri (:uri script-ref)
-                    _ (println "uri: " uri)
-                    iores (validate-js-resource uri spec)
-                    _ (println "IO RES: " iores)]
-                (element :script {:rel "import"
-                                 :href uri}))))]
-  result))
+        result (into '()
+                     (for [script (reverse scripts)]
+                       (do (println "script name: " script)
+                           (let [script-sym (symbol
+                                             (str (ns-name import-ns)) (str script))
+                                 _ (println "script-sym: " script-sym)
+                                 script-ref (deref (find-var script-sym))
+                                 _ (println "script ref: " script-ref)
+                                 uri (:uri script-ref)
+                                 _ (println "uri: " uri)
+                                 iores (validate-js-resource uri spec)
+                                 _ (println "IO RES: " iores)]
+                             (element :script {:type "text/javascript"
+                                               :src uri})))))]
+    (doall result)
+    (println "RESULT: " result)
+    result))
 
 (defmethod import-resource :polymer-style-module
   [type spec]
@@ -1900,3 +1869,7 @@
          (doall reqs#)
          ;;(println "IMPORTed: " reqs#)
          reqs#)))
+
+(defn meta-map
+  [m]
+  (get-metas m))
