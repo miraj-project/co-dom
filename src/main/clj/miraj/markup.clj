@@ -39,9 +39,26 @@
 (def html5-global-attrs
   "https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes"
   ;;FIXME - handle data-*
-  {:access-key :class :content-editable :context-menu :dir :draggable
-   :drop-zone :hidden :id :item-id :item-prop :item-ref :item-scope :item-type
-   :lang :spellcheck :style :tab-index :title :translate})
+  {:access-key :_
+   :class :_
+   :content-editable :_
+   :context-menu :_
+   :dir :_
+   :draggable :_
+   :drop-zone :_
+   :hidden :_
+   :id :_
+   :item-id :_
+   :item-prop :_
+   :item-ref :_
+   :item-scope :_
+   :item-type :_
+   :lang :_
+   :spellcheck :_
+   :style :_
+   :tab-index :_
+   :title :_
+   :translate :_})
 
 (def html5-link-types
   #{:alternate :archives :author :bookmark :dns-prefetch :external :first
@@ -238,6 +255,10 @@
    "</xsl:template>"
    "</xsl:stylesheet>"))
 
+;; from http://webcomponents.org/polyfills/ :
+;; Note: Due to the nature of some of the polyfills, to maximize
+;; compatibility with other libraries, make sure that webcomponents.js is
+;; the first script tag in your document's <head>.
 (def xsl-optimize-js
   (str
    "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
@@ -250,12 +271,37 @@
      "</xsl:copy>"
    "</xsl:template>"
 
+   "<xsl:template match='head'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='optimize'/>"
+       "<xsl:apply-templates select='.//script' mode='polyfill'/>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='meta[@name=\"charset\"]'/>"
+   "<xsl:template match='meta[@name=\"charset\"]' mode='optimize'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
    "<xsl:template match='script'/>"
    "<xsl:template match='script' mode='optimize'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
+
+   ;; (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"})
+   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>"
+   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize' priority='99'/>"
+   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill' priority='99'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
    "<xsl:template match='body' priority='99'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
@@ -273,7 +319,7 @@
   (let [ml (do
              (if (not (instance? miraj.markup.Element elts))
                (do (println (type elts))
-                   (throw (Exception. "xml-xform only works on clojure.data.xml.Element"))))
+                   (throw (Exception. "xsl-xform only works on clojure.data.xml.Element"))))
              (serialize :xml elts))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -1100,7 +1146,7 @@
 
 (defn optimize-js
   [doc]
-  ;; (println "JS optimizer")
+  ;; (println "JS optimizer: " doc)
   (with-meta
     (xsl-xform xsl-optimize-js doc)
     (meta doc)))
@@ -1115,12 +1161,19 @@
    (println "CSS optimizer"))
 
 (defn optimize
-  [strategy doc]
+  ;;FIXME handle null strategy correctly
+  [strategy & doc]
+  ;; (println "optimize: " strategy " :: " doc)
   (reset! mode :html)
   (case strategy
-    :js (optimize-js doc)
-    :css (optimize-css doc)
-    (println "Unrecognized optimizer: " strategy)))
+    :js (apply optimize-js doc)
+    :css (apply optimize-css doc)
+    (if (keyword? strategy)
+      (throw (Exception. (str "Unrecognize optimization strategy: " strategy)))
+      (if (nil? doc)
+        (optimize-js strategy)
+        (optimize-js doc)))))
+;;    (println "Unrecognized optimizer: " strategy)))
 
 (defn co-compile
   [file doc & mode]
@@ -1231,7 +1284,7 @@
 ;;FIXME support all attribs
   [typ nsp sym spec]
   (println "get-resource-elt :js: " (str typ " " nsp " " sym))
-  (element :script {:href (deref (find-var sym))}))
+  (element :script {:src (deref (find-var sym))}))
 
 (defn require-resource
   [comp]
@@ -1264,8 +1317,30 @@
    "<xsl:template match='html' priority='99'>"
      "<xsl:copy>"
        "<head>"
-         "<xsl:apply-templates select='link|style|meta' mode='head'/>"
+         "<xsl:choose>"
+           "<xsl:when test='meta[@name=\"charset\"]'>"
+             "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='charset'/>"
+           "</xsl:when>"
+           "<xsl:otherwise>"
+             "<meta name='charset' content='utf-8'/>"
+           "</xsl:otherwise>"
+         "</xsl:choose>"
+         "<xsl:apply-templates select='link|meta|script|style' mode='head'/>"
+         "<xsl:apply-templates select='head/link|head/meta|head/script|head/style' mode='head'/>"
        "</head>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='head'/>"
+   "<xsl:template match='head' mode='head'>"
+     "<xsl:apply-templates select='@*|node()' mode='head'/>"
+   "</xsl:template>"
+
+   "<xsl:template match='meta[@name=\"charset\"]' priority='99'/>"
+   "<xsl:template match='meta[@name=\"charset\"]' mode='head'/>"
+   "<xsl:template match='meta[@name=\"charset\"]' mode='charset'>"
+     "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
@@ -1276,8 +1351,8 @@
      "</xsl:copy>"
    "</xsl:template>"
 
-   "<xsl:template match='link|style|meta'/>"
-   "<xsl:template match='link|style|meta' mode='head'>"
+   "<xsl:template match='link|meta|script|style'/>"
+   "<xsl:template match='link|meta|script|style' mode='head'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -1293,22 +1368,286 @@
    "<xsl:template match='body//link' priority='99' mode='head'/>"
    "</xsl:stylesheet>"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  ATTRIBS
+
+(def attrs-regex
+  #" *[^>]* *>")
+
+(def attrs-overlap-start-regex
+  ;; e.g. for a, b, em, i, li etc
+  ;; match <li>, <li >, <li/>, <li />
+  #" */?>")
+
+(def attrs-overlap-attrs-regex
+  ;; e.g. for a, b, em, i, li etc
+  ;; match <li>, <li >, <li/>, <li />, <li foo="bar">, <li foo="bar">
+  #" +[^>]* */?>")
+
+(def encoding-decl-regex
+  ;; https://encoding.spec.whatwg.org/#names-and-labels
+  [#"(?i)unicode-1-1-utf-8"
+   #"(?i)utf-8"
+   #"(?i)utf8"])
+
+;; global attrs: http://www.w3.org/html/wg/drafts/html/master/dom.html#global-attributes
+;; meta standard names: :application-name, :author, :description, :generator, :keywords
+;; :charset;  :itemprop?
+;; extensions: https://wiki.whatwg.org/wiki/MetaExtensions
+;; see https://gist.github.com/kevinSuttle/1997924
+;; :viewport gets special treatment
+;; e.g.  :dc {:created ".." :creator "foo" ...}
+
+
+;; syntax:
+;;    keyword values represent type constraints by name
+;;    sets represent enum types
+;;    vectors map clj value to html value, e.g. [true "yes"]
+;;    quoted vals represent type, plus translate to <link> instead of <meta>
+
+(def mobile-meta-tags
+  {:mobile {:agent ^:compound {:format #{:wml :xhtml :html5}
+                               :url :_}
+            :web-app-capable [true "yes"]}})
+
+(def apple-meta-tags
+  ;; https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html
+  {:apple {:itunes-app :_
+           :mobile-web-app {:capable [true "yes"]
+                            :status-bar-style #{:default :black :black-translucent}
+                            :title :string}
+           :touch {:icon {:uri :uri :sizes :sizes}
+                   :startup-image :image}
+                   ;; apple-touch-fullscreen :_ ;; "not needed anymore"
+           :format-detection {:disable "telephone=no"}}})
+
+(def ms-meta-tags
+  {:msapplication {:config :uri
+                   :navbutton-color :color
+                   :notification {:?frequency #{30 60 360 720 1440}
+                                  :?cycle #{0 1 2 3 4 5 6 7}
+                                  :uri :uri
+                                  :?uris [:uri] ;; up to 5 total
+                                  }
+                   :square-70x70-logo :uri
+                   :square-150x150-logo :uri
+                   :square-310x310-logo :uri
+                   :starturl :uri
+                   :task {:name :string :action-uri :uri :icon-uri :uri
+                          :window-type #{:tab :self :window}}
+                   :tile-color :color
+                   :tile-image :uri
+                   :tooltip :string
+                   :tap-highlight :no
+                   :wide-310x150-logo :uri
+                   :window {:width :pixels, :height :pixels}
+                   ;; other ms metas https://msdn.microsoft.com/library/dn255024(v=vs.85).aspx
+                   :ms-pinned ^:nonstandard {:allow-domain-api-calls :bool
+                                             :allow-domain-meta-tags :bool
+                                             :badge {:frequency #{30 60 360 720 1440}
+                                                     :polling-uri :uri}
+                                             :start-url :uri
+                                             :task-separator :_}}})
+
+(def twitter-meta-tags
+  )
+
+(def html5-meta-attribs-standard
+  {:charset :encoding-decl   ;; :content is implicit as value of map entry
+   ;; standard vals for name attrib
+   :application-name :string
+   :author :string
+   :description :string
+   :generator :string
+   :keywords :tokens})
+
+(def html5-meta-attribs-extended
+   ;; extended name attribs https://wiki.whatwg.org/wiki/MetaExtensions
+  {:viewport ^:compound {:width #{:auto :device :pixels}
+               :height #{:auto :device :pixels}
+               :scale {:initial :number
+                       :minimum :number
+                       :maximum :number}
+               :user-scalable :boolean}
+   ;; dublin core
+   :dc {:created :_, :creator :_} ;; etc.
+   :dc-terms {:created :_, :creator :_} ;; etc.
+   :fragment "!"
+   :geo {:position :geocoord, :country :iso3166-1} ;; etc.
+   :referrer #{:no-referrer :no-referrer-when-downgrade
+               :origin :origin-when-cross-origin
+               :unsafe-url}
+   :revision :_
+   :theme-color :color
+   :twitter {:card :_
+             :domain :_
+             :url :_
+             :title :_
+             :description :_
+             ;; etc.
+             }})
+
+(def html5-miraj-meta-attribs
+  {:platform (merge apple-meta-tags ms-meta-tags mobile-meta-tags)})
+
+(def html5-meta-attribs
+  (merge {} html5-global-attrs
+         html5-meta-attribs-standard html5-meta-attribs-extended html5-miraj-meta-attribs))
+         ;; apple-meta-tags ms-meta-tags))
+
+(def html5-pragma-directives
+  "meta http-equiv pragma directives
+  http://www.w3.org/html/wg/drafts/html/master/semantics.html#pragma-directives"
+  ["http-equiv"
+   ;; {fn-name [elt-tag <validation rule>]}
+  {:content-language ["content-language" {:non-conforming "Authors are
+  encouraged to use the lang attribute instead."}]
+   :content-type ["content-type" :encoding-decl]
+   :default-style ["default-style" :string]
+   :refresh ["refresh" :refresh-syntax]
+   :set-cookie ["set-cookie" {:non-conforming "Real HTTP headers should be used instead."}]
+   ;; HTML 5.1
+   :content-security-policy ["Content-Security-Policy" :string]
+   ;; :x-ua-compatible
+   }])
+
+(defn apply-meta-rule
+  [tag key val ruleset]
+  (println (str "APPLY META RULE: " tag " | " key " | " val " | " ruleset))
+  (let [this-tag (subs (str key) 1)
+        result (for [[k v] val]
+      (do (println "key: " k ", val: " v)
+          (if-let [rule (get ruleset k)]
+            (let [k-tag (subs (str k) 1)]
+              (println "rule: " rule)
+              (cond
+                (keyword? rule)
+                (do (println "meta keyword rule: " k ", " val ": " rule)
+                    (let [val-param (get val k)
+                          elt (condp = rule
+                                :color (element :meta {:name (str tag this-tag "-" k-tag)
+                                                :content (str val-param)})
+                                :boolean (element :meta {:name (str tag this-tag "-" k-tag)
+                                                :content (str val-param)})
+                                :number (element :meta {:name (str tag this-tag "-" k-tag)
+                                                 :content (str val-param)})
+                                :pixels (element :meta {:name (str tag this-tag "-" k-tag)
+                                                 :content (str val-param)})
+                                :string (element :meta {:name (str tag this-tag "-" k-tag)
+                                                 :content (str val-param)})
+                                :sizes (element :meta {:name (str tag this-tag "-" k-tag)
+                                                 :content (str val-param)})
+                                :uri (element :meta {:name (str tag this-tag "-" k-tag)
+                                              :content (str val-param)})
+                                :_ (element :meta {:name (str tag this-tag "-" k-tag)
+                                            :content (str val-param)})
+                                ;; :tokens
+                                )]
+                      ;;(log/trace "elt: " elt)
+                      elt))
+
+                (map? rule) (do (println "meta map key: " k)
+                                (println "meta map val: " (get val k))
+                                (if (:compound (clojure.core/meta rule))
+                                  (let [nm (str tag this-tag "-" k-tag)
+                                        content (str/join
+                                                       "; " (for [[k v] (get val k)]
+                                                             (str (subs (str k) 1)
+                                                                  "="
+                                                                  (if (keyword? v)
+                                                                    (subs (str v) 1)
+                                                                    (str v)))))]
+                                    (element :meta {:name nm :content content}))
+                                (apply-meta-rule (str this-tag "-") k (get val k) rule)))
+
+                (set? rule)
+                (do (println "meta set rule: " k rule)
+                    (let [val-param (get val k)]
+                      (println "val: " val-param)
+                      (if (contains? rule val-param)
+                        (let [nm (str tag this-tag "-" k-tag)
+                              content (subs (str val-param) 1)]
+                          (element :meta {:name nm :content content}))
+                        (throw (Exception. (str "META: unrecognized enum option: "
+                                                key " {" k " " v"}"))))))
+
+                (vector? rule)
+                (do ;;(log/trace "meta vector rule: " k ", " val ": " rule)
+                    (let [v (val k)]
+                      ;;(log/trace "found val: " v)
+                      (if (= v (first rule))
+                        (let [nm (str tag this-tag "-" k-tag)
+                              content (second rule)]
+                          ;;(log/trace nm  "=\"" content "\"")
+                          (element :meta {:name nm :content content}))
+                        (throw (Exception. (str "META: unrecognized option: " key " {" k " " v"}"))))))
+                :else (throw (Exception.
+                              (str "META: unrecognized option type: "
+                                   key " {" k " " v"}" (type rule)))))))))]
+    (doall result)
+    result))
+
+(defn get-metas
+  [metas]
+  (println "GET-METAS " metas)
+  (println "HTML5-METAS " (keys html5-meta-attribs))
+  (let [ms (for [[tag val] metas]
+             (let [rule (get html5-meta-attribs tag)]
+               (println "META: " tag (pr-str val) " RULE: " rule)
+               (if (nil? rule) (throw (Exception. (str "unknown meta name: " (str tag)))))
+               (if (keyword? rule)
+                 ;; FIXME: validation
+                 (let [m (element :meta {:name (subs (str tag) 1) :content (str val)})]
+                   (println "META ELT: " m)
+                   m)
+                 (apply-meta-rule "" tag val rule))))]
+               ;; (case tag
+               ;;   :apple (let [apple (apply-meta-rule "" tag val rule)]
+               ;;            #_(log/trace "APPLE: " apple) apple)
+               ;;   :msapplication (let [ms (apply-meta-rule "msapplication" tag val rule)]
+               ;;                    #_(log/trace "MSAPP: " ms) ms)
+               ;;   :mobile (let [ms (apply-meta-rule "" tag val rule)]
+               ;;             #_(log/trace "MOBILE: " ms) ms)
+               ;;   (element :meta {:name (subs (str tag) 1)
+               ;;            :content (str val)}))))]
+    ;; force eval, for printlns
+    (doall ms)
+    (println "METAS: " ms)
+    ms))
+
+(defn platform
+  [{:keys [apple ms mobile]}]
+  ;; (println "apple: " apple)
+  ;; (println "ms: " ms)
+  ;; (println "mobile: " mobile)
+  (merge (apply-meta-rule "" :apple apple (:apple apple-meta-tags))
+         (apply-meta-rule "" :msapplication ms (:msapplication ms-meta-tags))
+         (apply-meta-rule "" :mobile mobile (:mobile mobile-meta-tags))))
+
+(defn get-meta-elts
+  [args]
+  (println "get-meta-elts: " args)
+  (for [[k v] (apply meta args)]
+    (element :meta {:name (kw->nm k)
+                    :content (str v)})))
+
 (defn normalize
   "inspect args, if necessary create <head> etc."
   [& args]
-  (println "HTML args: " args)
-  (println "HTML meta: " (meta args))
+  ;; (println "normalize HTML args: " args)
+  ;; (println "normalize HTML meta: " (apply meta args))
   (reset! mode :html)
-  (let [meta-elts (for [[k v] (meta (first args))]
-                    (element :meta {:name (kw->nm k)
-                                    :content (str v)}))
+  (let [meta-elts (get-metas (:html-meta (apply meta args)))
+        _ (println "META-ELTS: " meta-elts)
         h (list
            (update (first args)
                    :content
                    (fn [content]
-                     (if (meta args)
+                     (if meta-elts
                        (concat meta-elts content)
                        content))))
+        _ (println "H: " h)
         normh (apply xsl-xform xsl-normalize h)
         ]
     normh))
@@ -1321,7 +1660,6 @@
      (macroexpand
       `(do (println "REQUIRING: " ~arg)
            (clojure.core/require ~arg)))))
-  (println "FOO: ")
   `(do
      (println "REQUIRing: " [~@args])
      (let [reqs# (for [arg# [~@args]]
@@ -1376,21 +1714,58 @@
         result
         (for [style styles]
           (do (println "style name: " style)
-              (let [style-sym (symbol
-                               (str (ns-name import-ns)) (str style))
+              (let [style-sym (symbol (str (ns-name import-ns)) (str style))
                     _ (println "style-sym: " style-sym)
                     style-ref (deref (find-var style-sym))
                     _ (println "style ref: " style-ref)
                     uri (:uri style-ref)
                     _ (println "uri: " uri)
+
                     iores (if-let [res (io/resource uri)]
                             res (throw (Exception. (str "CSS resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))
-                    _ (println "IO RES: " iores)]
-                    ;; rsrc (slurp (io/file (io/resource uri)))]
-                ;; (println "RESOURCE: " rsrc)
-                (element :style {:rel "stylesheet"
-                                 :href uri}))))]
+                    ;; _ (println "IO RES: " iores)
+                    style-var (resolve style-sym)]
+                (if (nil? style-var)
+                  (throw (Exception. (str "Style '" style "' not found in namespace '" nsp "'")))
+                  (do (println "style var: " style-var)
+                      (let [style-ref (deref (find-var style-sym))
+                            _ (println "style ref: " style-ref)
+                            uri (:uri style-ref)]
+                        (element :style {:rel "stylesheet"
+                                         :href uri})))))))]
   result))
+
+;; (defmethod import-resource :js
+;;   [typ spec]
+;;   (println "import-resource :js: " typ spec)
+;;   (let [nsp (first spec)
+;;         import-ns (find-ns nsp)
+;;         _ (println "import ns: " import-ns)
+;;         _ (println "import ns meta: " (meta import-ns))
+;;         resource-type (:resource-type (meta import-ns))
+;;         scripts (rest spec)
+;;         _ (println "scripts : " scripts)
+;;         ;; uri (deref (find-var
+;;         ;;             (symbol (str (ns-name import-ns)) "uri")))
+;;         ;; _ (println "uri: " uri)
+;;         result
+;;         ;; (concat
+;;         ;;  (list (element :link {:rel "import" :href uri}))
+;;          ;; SHARED STYLES!
+;;         (for [script scripts]
+;;           (do (println "script name: " script)
+;;               (let [script-sym (symbol (str (ns-name import-ns)) (str script))
+;;                     _ (println "script-sym: " script-sym)
+;;                     script-var (resolve script-sym)]
+;;                 (if (nil? script-var)
+;;                   (throw (Exception. (str "Script '" script "' not found in namespace '" nsp "'")))
+;;                   (do (println "script var: " script-var)
+;;                       (let [script-ref (deref (find-var script-sym))
+;;                             _ (println "script ref: " script-ref)
+;;                             uri (:uri script-ref)]
+;;                         (element :script {:src uri})))))))]
+;; >>>>>>> c379cbc38407042ab623e0883694ab6a5ac540f1:src/main/clj/miraj/markup.clj
+;;   result))
 
 (defn validate-js-resource
   [uri spec]
@@ -1485,7 +1860,10 @@
        (let [reqs# (for [arg# [~@args]]
                      (do (println "GET-IMP: " arg#)
                          (let [r# (get-import arg#)]
-                           (println "REQRES: " r#)
+                           ;; force realization, for printlns
+                           (doall r#)
                            r#)))]
-         (println "IMPORTed: " reqs#)
+         ;; force realization of lazy seq, so printlns will work
+         (doall reqs#)
+         ;;(println "IMPORTed: " reqs#)
          reqs#)))

@@ -444,11 +444,14 @@ example stylesheet see `xsl-optimize-js` in the source code.
 It also comes with one predefined transform, `optimize` that uses
 `xsl-xform`.  Currently `optimize` takes one "strategy" keyword, :js,
 and an Element tree.  It moves all <script> elements to the bottom of
-the HTML, just before the closing </body> tag:
+the HTML, just before the closing </body> tag, moves any <meta
+name="charset"...> element to the top of <head>, and ensures that any
+script element sourcing the webcomponentsjs polyfill appears before
+any other <script> elements in <head>.
 
 [source,clojure]
 ----
-(optimize :js my-doc)
+(optimize my-doc) ;; defaults to (optimize :js my-doc)
 ----
 
 === [[co-comp]] co-compilation
