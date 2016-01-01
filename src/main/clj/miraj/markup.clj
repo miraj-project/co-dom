@@ -130,7 +130,11 @@
                                             (str "Invalid link type value for rel attribute: {"
                                                  k " " v "}; valid values are: "
                                                  html5-link-types))))
-                       (keyword? v) (str "{{" (subs (str v) 1) "}}")
+                       (keyword? v)
+                       (if (nil? (namespace v))
+                         (str "{{" (subs (str v) 1) "}}")
+                         (str "{{" (subs (str v) 1) "}}"))
+
                        (symbol? v) (str "[[" (str v) "]]")
                        ;; (= (subs (str k) 1) (str v)) miraj-boolean-tag
                        ;; (empty? v) miraj-boolean-tag
@@ -296,7 +300,7 @@
    "</xsl:template>"
 
    "<xsl:template match='script'/>"
-   "<xsl:template match='script' mode='optimize' prioritize='99'>"
+   "<xsl:template match='script' mode='optimize' priority='99'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -521,10 +525,12 @@
   (gen-event [kw]
     (let [nm (name kw)
           ns (namespace kw)]
-    (Event. :kw nil nil
-            ;; (if (.endsWith nm "%")
-            ;;   (str "{{" ns (if ns ".") (subs nm 0 (- (count nm) 1))  "}}")
-              (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]"))))
+      (Event. :kw nil nil
+              ;; FIXME this should not be necessary if the tag fns are correct:
+              (if (nil? (namespace kw))
+                (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")
+                (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
+
   (next-events [_ next-items]
     next-items)
 
@@ -986,43 +992,43 @@
                           func#))))))
           f (eval func)])))
 
-(defn make-meta-tag-fn-x
-  [tag+validator]
-  ;; (log/trace "make-tag-fn " tag+validator)
-    (let [fn-tag (symbol (subs (str (first tag+validator)) 1))
-          fn-validator (fnext tag+validator)
-          elt (keyword fn-tag)
-          ;; log (println "make-meta-tag-fn fn-tag: " fn-tag)
-          ;; log (println "make-meta-tag-fn elt-kw: " elt)
-          func `(defn ~fn-tag ;; (symbol (str tag))
-                  [& fn-args#]
-                  ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
-                  (if (empty? fn-args#)
-                    (element ~elt)
-                    (let [first# (first fn-args#)
-                          attrs# (if (map? first#)
-                                   (do ;(log/trace "map? first")
-                                       (if (instance? miraj.markup.Element first#)
-                                         (do ;(log/trace "Element instance")
-                                             {})
-                                         (do ;(log/trace "NOT Element instance")
-                                             first#)))
-                                   (do ;(log/trace "NOT map? first")
-                                       {}))
-                          content# (if (map? first#)
-                                     (if (instance? miraj.markup.Element first#)
-                                       fn-args#
-                                       (rest fn-args#))
-                                     fn-args#)
-                          func# (apply element ~elt attrs# content#)]
-                      ;; (log/trace "fn-args: " fn-args#)
-                      ;; (log/trace "elt: " ~elt)
-                      ;; (log/trace "tags: " attrs#)
-                      ;; (log/trace "content: " content# " (" (type content#) ")")
-                      ;; (log/trace "func: " func# (type func#))
-                      func#)))]
-      ;;(println (macroexpand func))))
-      (eval func)))
+;; (defn make-meta-tag-fn-x
+;;   [tag+validator]
+;;   ;; (log/trace "make-tag-fn " tag+validator)
+;;     (let [fn-tag (symbol (subs (str (first tag+validator)) 1))
+;;           fn-validator (fnext tag+validator)
+;;           elt (keyword fn-tag)
+;;           ;; log (println "make-meta-tag-fn fn-tag: " fn-tag)
+;;           ;; log (println "make-meta-tag-fn elt-kw: " elt)
+;;           func `(defn ~fn-tag ;; (symbol (str tag))
+;;                   [& fn-args#]
+;;                   ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
+;;                   (if (empty? fn-args#)
+;;                     (element ~elt)
+;;                     (let [first# (first fn-args#)
+;;                           attrs# (if (map? first#)
+;;                                    (do ;(log/trace "map? first")
+;;                                        (if (instance? miraj.markup.Element first#)
+;;                                          (do ;(log/trace "Element instance")
+;;                                              {})
+;;                                          (do ;(log/trace "NOT Element instance")
+;;                                              first#)))
+;;                                    (do ;(log/trace "NOT map? first")
+;;                                        {}))
+;;                           content# (if (map? first#)
+;;                                      (if (instance? miraj.markup.Element first#)
+;;                                        fn-args#
+;;                                        (rest fn-args#))
+;;                                      fn-args#)
+;;                           func# (apply element ~elt attrs# content#)]
+;;                       ;; (log/trace "fn-args: " fn-args#)
+;;                       ;; (log/trace "elt: " ~elt)
+;;                       ;; (log/trace "tags: " attrs#)
+;;                       ;; (log/trace "content: " content# " (" (type content#) ")")
+;;                       ;; (log/trace "func: " func# (type func#))
+;;                       func#)))]
+;;       ;;(println (macroexpand func))))
+;;       (eval func)))
 
 (defn make-meta-tag-fns
   [rules]
@@ -1059,11 +1065,39 @@
             ;; #_(println (macroexpand func))
             ;; (eval func))))))
 
+(defn get-attrs-for-tag
+  [args]
+  (println "get-attrs-for-tag" args)
+  (let [first (first args)]
+    (cond
+      (keyword first)
+      (do (println "keyword? first: " first)
+          (if (nil? (namespace first))
+            {}
+            (let [toks (str/split (name first) #"\.")
+                  first (get toks 0)]
+              (println "TOKS: " toks (count toks) first)
+              (if (.startsWith first "#")
+                {:id (subs first 1)
+                 :class (str/join " " (rest toks))}
+                {:class (str/join " " toks)}))))
+
+      (map? first)
+      (do ;(log/trace "map? first")
+        (if (instance? miraj.markup.Element first)
+          (do ;(log/trace "Element instance")
+            {})
+          (do ;(log/trace "NOT Element instance")
+            first)))
+
+      :else (do (println "NOT map? first: " first)
+                {}))))
+
 (defn make-tag-fns
   [pfx tags sfx]
-  ;; (println "make-tag-fns " pfx tags sfx)
+  (println "make-tag-fns " pfx tags sfx)
   (doseq [tag tags]
-    (do ;(println "make-tag-fn " tag)
+    (do (println "make-tag-fn " tag)
         (let [fn-tag (cond
                      (string? tag) (symbol tag)
                      (vector? tag) (symbol (last tag)))
@@ -1072,30 +1106,26 @@
                                       (vector? tag) (last tag))))
               ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
-                      [& htags#]
-                      ;; (println "POLYMER FN: " ~elt (pr-str htags#))
-                      (if (empty? htags#)
+                      [& args#]
+                      (println "HTML FN: " ~elt (pr-str args#))
+                      (if (empty? args#)
                         (element ~elt)
-                        (let [first# (first htags#)
-                              attrs# (if (map? first#)
-                                       (do ;(log/trace "map? first")
-                                         (if (instance? miraj.markup.Element first#)
-                                           (do ;(log/trace "Element instance")
-                                             {})
-                                           (do ;(log/trace "NOT Element instance")
-                                             first#)))
-                                       (do ;(log/trace "NOT map? first")
-                                         {}))
+                        (let [first# (first args#)
+                              attrs# (get-attrs-for-tag args#)
                               content# (if (map? first#)
                                          (if (instance? miraj.markup.Element first#)
-                                           htags#
-                                           (rest htags#))
-                                         htags#)
+                                           args#
+                                           (rest args#))
+                                         (if (keyword? first#)
+                                           (if (nil? (namespace first#))
+                                             args#
+                                             (rest args#))
+                                           args#))
                               func# (with-meta (apply element ~elt attrs# content#)
                                       {:co-fn true
                                        :elt-kw ~elt
                                        :elt-uri "foo/bar"})]
-                          ;; (log/trace "htags: " htags#)
+                          ;; (log/trace "args: " htags#)
                           ;; (log/trace "elt: " ~elt)
                           ;; (log/trace "tags: " attrs#)
                           ;; (log/trace "content: " content# " (" (type content#) ")")
@@ -1620,8 +1650,8 @@
 
 (defn get-metas
   [metas]
-  (println "GET-METAS " metas)
-  (println "HTML5-METAS " (keys html5-meta-attribs))
+  ;; (println "GET-METAS " metas)
+  ;; (println "HTML5-METAS " (keys html5-meta-attribs))
   (let [ms (for [[tag val] metas]
              (let [rule (get html5-meta-attribs tag)]
                (println "META: " tag (pr-str val) " RULE: " rule)
