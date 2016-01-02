@@ -1068,29 +1068,32 @@
 (defn get-attrs-for-tag
   [args]
   (println "get-attrs-for-tag" args)
-  (let [first (first args)]
+  (let [fst (first args)]
     (cond
-      (keyword first)
-      (do (println "keyword? first: " first)
-          (if (nil? (namespace first))
+      (keyword? fst)
+      (do (println "keyword? fst: " fst)
+          (if (nil? (namespace fst))
             {}
-            (let [toks (str/split (name first) #"\.")
-                  first (get toks 0)]
-              (println "TOKS: " toks (count toks) first)
-              (if (.startsWith first "#")
-                {:id (subs first 1)
-                 :class (str/join " " (rest toks))}
-                {:class (str/join " " toks)}))))
+            (let [tokstr (name fst)
+                  no-id (.startsWith tokstr ".")
+                  toks (filter identity (str/split tokstr #"\."))
+                  fst (first toks)]
+              (doall toks)
+              (println "TOKS: " toks fst)
+              (if no-id
+                {:class (str/join " " toks)}
+                {:id fst
+                 :class (str/join " " (rest toks))}))))
 
-      (map? first)
-      (do ;(log/trace "map? first")
-        (if (instance? miraj.markup.Element first)
+      (map? fst)
+      (do ;(log/trace "map? fst")
+        (if (instance? miraj.markup.Element fst)
           (do ;(log/trace "Element instance")
             {})
           (do ;(log/trace "NOT Element instance")
-            first)))
+            fst)))
 
-      :else (do (println "NOT map? first: " first)
+      :else (do (println "NOT map? fst: " fst)
                 {}))))
 
 (defn make-tag-fns
@@ -1106,31 +1109,33 @@
                                       (vector? tag) (last tag))))
               ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
-                      [& args#]
-                      (println "HTML FN: " ~elt (pr-str args#))
-                      (if (empty? args#)
-                        (element ~elt)
-                        (let [first# (first args#)
-                              attrs# (get-attrs-for-tag args#)
-                              content# (if (map? first#)
-                                         (if (instance? miraj.markup.Element first#)
-                                           args#
-                                           (rest args#))
-                                         (if (keyword? first#)
-                                           (if (nil? (namespace first#))
+                      [& parms#]
+                      (println "HTML FN: " ~elt (pr-str parms#))
+                      (let [args# (flatten parms#)]
+                        (println "HTML FLAT: " ~elt (pr-str (flatten args#)))
+                        (if (empty? args#)
+                          (element ~elt)
+                          (let [first# (first args#)
+                                attrs# (get-attrs-for-tag args#)
+                                content# (if (map? first#)
+                                           (if (instance? miraj.markup.Element first#)
                                              args#
                                              (rest args#))
-                                           args#))
-                              func# (with-meta (apply element ~elt attrs# content#)
-                                      {:co-fn true
-                                       :elt-kw ~elt
-                                       :elt-uri "foo/bar"})]
+                                           (if (keyword? first#)
+                                             (if (nil? (namespace first#))
+                                               args#
+                                               (rest args#))
+                                             args#))
+                                func# (with-meta (apply element ~elt attrs# content#)
+                                        {:co-fn true
+                                         :elt-kw ~elt
+                                         :elt-uri "foo/bar"})]
                           ;; (log/trace "args: " htags#)
                           ;; (log/trace "elt: " ~elt)
                           ;; (log/trace "tags: " attrs#)
                           ;; (log/trace "content: " content# " (" (type content#) ")")
                           ;; (log/trace "func: " func# (type func#))
-                          func#)))
+                            func#))))
               f (eval func)]))))
 
 ;;FIXME rename this to make-component-fns
