@@ -197,14 +197,13 @@
    "</xsl:template>"
 
    "<xsl:template match='html'>"
-     "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;&#xA;</xsl:text>"
-     "&#xA;"
+     "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;</xsl:text>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
 
-   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elts) "\">"  ;;*[.='']\">"
+   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elts) "\">"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
        "VOID"
@@ -437,8 +436,6 @@
              (if (not (instance? miraj.markup.Element elts))
                (do (println (type elts))
                    (throw (Exception. "xsl-xform only works on clojure.data.xml.Element"))))
-             (println "xforming elts: " (type elts))
-             ;; (serialize-impl elts))
              (serialize :xml elts))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -446,14 +443,11 @@
         transformer (.newTransformer factory (StreamSource. (StringReader. ss)))]
     ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
     ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
-    (println "FOOBAZ")
     (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
-    (println "FOOBARBAZ")
     (.transform transformer xmlSource xmlOutput)
     (parse-str (.toString (.getWriter xmlOutput)))))
-    ;; (.toString (.getWriter xmlOutput))))
 
 ;;FIXME: support non-tree input
 ;;FIXME: support :xhtml option
@@ -529,7 +523,7 @@
 
 (defn serialize-impl
   [& elts]
-  (println "serialize-impl: " #_elts)
+  ;; (println "serialize-impl: " #_elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -539,7 +533,7 @@
               elts))
         fmt (if (keyword? (first elts)) (first elts) :html)
         void (reset! mode fmt)
-        _ (println "mode: " @mode)
+        ;; _ (println "mode: " @mode)
         ;; always serialize to xml, deal with html issues in the transform
         ml (if (string? s)
              (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))
@@ -552,40 +546,41 @@
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
                      (if (.startsWith ml "<!doctype")
-                       (.write sw "<!doctype html>\n"))
+                       (.write sw "<!doctype html>"))
                      sw))
         factory (TransformerFactory/newInstance)
         transformer (if (= :html @mode)
                       (do
-                        (println "transforming with xsl-identity-transform-html")
+                        ;;(println "transforming with xsl-identity-transform-html")
                       (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
                       (do
                         ;;(log/trace "transforming with xsl-identity-transform-xml")
                       (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
     ;;                      (.newTransformer factory))]
-    ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
-    ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
+    (.setOutputProperty transformer OutputKeys/INDENT "no")
+    (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "0")
     (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
 
     (.transform transformer xmlSource xmlOutput)
     (let[result (if (= :html fmt)
-                                        ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
                   (let [string-writer (.getWriter xmlOutput)
                         s (.toString string-writer)
+                        ;; _ (prn "XML OUTPUT: " s)
                         void (.flush string-writer)
                         s (str/replace s #"VOID<[^>]+>" "")
                         s (str/replace s #"_EMPTY_333109" "")
                         s (str/replace s #"<!\[CDATA\[" "")
                         s (str/replace s #"]]>" "")
                         regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
-                    ;; boolean attribs: value must be "" or must match attrib name
-                    ;;FIXME: make this more robust
                     (str/replace s regx ""))
                   (do (println "XML FOOBAR")
                       (.toString (.getWriter xmlOutput))))]
+      ;; (prn "OUTPUT: " result)
       result)))
+
+(declare emit)
 
 (defn serialize
   "Serializes the Element to String and returns it.
@@ -595,7 +590,7 @@
     :with-xml-declaration <bool>, default false"
   ;; [& args]
   [& elts]
-  (println "serialize: " elts)
+  ;; (println "serialize: " elts)
   (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
                (rest elts)
                (if (keyword? (first elts))
@@ -605,7 +600,7 @@
         ^java.io.StringWriter
         string-writer (java.io.StringWriter.)]
     (reset! mode fmt)
-    (println "serializing to" @mode ": " args)
+    ;; (println "serializing to" @mode ": " args)
     (let [doc-str (cond
                     (= @mode :html)
                     (do ;(log/trace "emitting HTML: " args)
@@ -615,16 +610,17 @@
                     ;; (emit args string-writer :html true :with-xml-declaration false))
 
                     (= @mode :xml)
-                    (do (println "emiting XML")
+                    (do ;;(println "emiting XML")
                       ;; (apply serialize-impl elts))
-                      (if (= :with-xml-declaration (first args))
-                        (do ;(log/trace "emitting with xml decl: " args)
-                          (emit (rest args) string-writer :with-xml-declaration true))
-                        (do ;(log/trace "emitting w/o xml decl: " args)
-                          (emit args string-writer :with-xml-declaration false))))
+                      (.toString
+                       (if (= :with-xml-declaration (first args))
+                         (do ;(log/trace "emitting with xml decl: " args)
+                           (emit (rest args) string-writer :with-xml-declaration true))
+                         (do ;(log/trace "emitting w/o xml decl: " args)
+                           (emit args string-writer :with-xml-declaration false)))))
                     :else
                     (throw (Exception. "invalid mode: " @mode)))]
-      (.toString doc-str))))
+      doc-str)))
     ;; (str (if (= @mode :html)
     ;;        (let [s (str/replace (.toString string-writer) #"VOID<[^>]+>" "")
     ;;              regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
@@ -632,7 +628,7 @@
     ;;        (.toString string-writer)))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
-  ;; (println "emit-start-tag: " (:name event))
+  ;;(println "emit-start-tag: " (:name event))
   (let [[nspace qname] (qualified-name (:name event))]
     (.writeStartElement writer "" qname (or nspace ""))
     (write-attributes (:attrs event) writer)))
@@ -661,7 +657,7 @@
       (= s "")))
 
 (defn emit-cdata [^String cdata-str ^javax.xml.stream.XMLStreamWriter writer]
-  (println "EMIT-CDATA " cdata-str)
+  ;; (println "EMIT-CDATA " cdata-str)
   (when-not (str-empty? cdata-str)
     (let [idx (.indexOf cdata-str "]]>")]
       (if (= idx -1)
@@ -777,6 +773,12 @@
   (next-events [_ next-items]
     next-items)
 
+  Long
+  (gen-event [b]
+    (Event. :chars nil nil (str b)))
+  (next-events [_ next-items]
+    next-items)
+
   CData
   (gen-event [cdata]
     (Event. :cdata nil nil (:content cdata)))
@@ -807,14 +809,24 @@
 
 (defn parse-elt-args
   [attrs content]
-  ;(println "parse-elt-args ATTRS: " attrs " CONTENT: " content)
+  ;; (println "parse-elt-args ATTRS: " attrs " CONTENT: " content)
   ;; (let [fst attrs] ;; (first args)]
     (cond
+      (number? attrs)
+      (do ;;(println "number? attrs: " attrs)
+          ;; (span 3) => <span>3</span>
+        [{} (list attrs content)])
+
+      (symbol? attrs)
+      (do ;;(println "keyword? attrs: " attrs)
+          ;; (span 'foo) => <span>{{foo}}</span>
+        [{} (list attrs content)])
+
       (keyword? attrs)
       (do ;;(println "keyword? attrs: " attrs)
           ;; (span :foo) => <span>[[foo]]</span>
           (if (nil? (namespace attrs))
-            {}
+            [{} (list attrs content)]
             ;; (span ::foo) => <span id="foo"></span>
             ;; (span ::foo.bar) => <span id="foo" class="bar"></span>
             ;; (span ::.foo.bar) => <span class="foo bar"></span>
@@ -839,7 +851,7 @@
           (do ;;(println "NOT Element instance")
             [attrs content])))
 
-      :else (do ;(println "NOT map attrs: " attrs)
+      :else (do ;;(println "NOT map attrs: " attrs)
                 [{} (remove empty? (list attrs content))])))
 
 (defn element [tag & [attrs & content]]
@@ -1089,7 +1101,7 @@
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   [e ^java.io.Writer writer & {:as opts}]
-  (println "emit: " e " OPTS: " opts)
+  ;; (println "emit: " e " OPTS: " opts)
   (let [^javax.xml.stream.XMLStreamWriter stream-writer
         (-> (javax.xml.stream.XMLOutputFactory/newInstance)
             (.createXMLStreamWriter writer))]
@@ -1291,7 +1303,7 @@
               ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
                       [& parms#]
-                      ;; (println "HTML FN: " ~elt (pr-str parms#))
+                      (println "HTML FN: " ~elt (pr-str parms#))
                       (let [args# (flatten parms#)]
                         ;; (println "HTML FLAT: " ~elt (pr-str (flatten args#)))
                         (if (empty? args#)
@@ -1833,7 +1845,7 @@
                      (if meta-elts
                        (concat meta-elts content)
                        content))))
-        _ (println "H: " h)
+        ;; _ (println "H: " h)
         normh (apply xsl-xform xsl-normalize h)
         ]
     normh))

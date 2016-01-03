@@ -120,7 +120,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CDATA - <script> and <style>
 
-(deftest ^:elts cdata-1
+(deftest ^:elts cdata-script
   (testing "CDATA - <script>"
     (is (= (serialize (element :script))
            "<script></script>"))
@@ -129,5 +129,29 @@
     (is (= (serialize (element :script "x < y"))
            "<script>x < y</script>"))
     (is (= (serialize (element :script "foo & bar"))
-           "<script>foo</script>"))))
+           "<script>foo & bar</script>"))
+    (is (= (serialize (element :script "1 + 1 > 1 + 2"))
+           "<script>1 + 1 > 1 + 2</script>"))
+    (is (= (serialize (element :script "1 + 1 < 1 + 2 && x < y"))
+           "<script>1 + 1 < 1 + 2 && x < y</script>"))))
+
+(deftest ^:elts cdata-style
+  (testing "CDATA - <style>"
+    (is (= (serialize (element :style))
+           "<style></style>"))
+    (is (= (serialize (element :style "foo"))
+           "<style>foo</style>"))
+    (is (= (serialize (element :style "x < y"))
+           "<style>x < y</style>"))
+    (is (= (serialize (element :style "foo & bar"))
+           "<style>foo & bar</style>"))
+    (is (= (serialize (element :style "1 + 1 > 1 + 2"))
+           "<style>1 + 1 > 1 + 2</style>"))
+    (is (= (serialize (element :style "1 + 1 < 1 + 2 && x < y"))
+           "<style>1 + 1 < 1 + 2 && x < y</style>"))))
+
+(deftest ^:elts cdata-misc
+  (testing "CDATA - misc"
+    (is (= (serialize (element :script (+ 1 2)))
+           "<script>3</script>"))))
 
