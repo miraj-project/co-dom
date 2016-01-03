@@ -11,7 +11,7 @@
   miraj.markup.docs-test
   (:require [clojure.java.io :as io]
             [clojure.test :refer :all]
-            [miraj.markup :refer :all]))
+            [miraj.markup :refer :all :exclude [import require]]))
 
 (def doc (element :html
                   (element :head
@@ -33,9 +33,10 @@
 
 (deftest ^:docs optimize-1
   (testing "JS optimizer moves <script> elements from <head> to bottom of <body>."
-    (is (= (optimize :js doc)
-           #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{:tag :head, :attrs {}, :content (#miraj.markup.Element{:tag :meta, :attrs {:application-name "markup test"}, :content ()})} #miraj.markup.Element{:tag :body, :attrs {}, :content (#miraj.markup.Element{:tag :h1, :attrs {}, :content ("Hello world")} #miraj.markup.Element{:tag :script, :attrs {:src "foo/bar.css"}, :content ()} #miraj.markup.Element{:tag :script, :attrs {:src "foo/baz.css"}, :content ()})})}))
-    (is (= (serialize (optimize :js doc))
-           "<!doctype html><html><head><meta applicationname=\"markup test\"></head><body><h1>Hello world</h1><script src=\"foo/bar.css\"></script><script src=\"foo/baz.css\"></script></body></html>"))
-    (pprint (optimize :js doc))))
+    (is (= (optimize (normalize doc))
+           #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{:tag :head, :attrs {}, :content (#miraj.markup.Element{:tag :meta, :attrs {:name "charset", :content "utf-8"}, :content ()} #miraj.markup.Element{:tag :meta, :attrs {:application-name "markup test"}, :content ()})} #miraj.markup.Element{:tag :body, :attrs {}, :content (#miraj.markup.Element{:tag :h1, :attrs {}, :content ("Hello world")} #miraj.markup.Element{:tag :script, :attrs {:src "foo/bar.css"}, :content ()} #miraj.markup.Element{:tag :script, :attrs {:src "foo/baz.css"}, :content ()})})}))
+
+    (is (= (serialize (optimize (normalize doc)))
+           "<!doctype html><html><head><meta name=\"charset\" content=\"utf-8\"><meta application-name=\"markup test\"></head><body><h1>Hello world</h1><script src=\"foo/bar.css\"></script><script src=\"foo/baz.css\"></script></body></html>"))
+    #_(pprint (optimize :js (normalize doc)))))
 

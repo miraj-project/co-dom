@@ -9,11 +9,11 @@
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
   data.xml.test-utils
-  (:require [miraj.markup :as xml]))
+  (:require [miraj.markup :refer :all :exclude [import require]]))
 
 (defn test-stream [x]
   (java.io.ByteArrayInputStream. (.getBytes x "UTF-8")))
 
-(def lazy-parse* (comp xml/parse test-stream))
+(def lazy-parse* (comp parse test-stream))
 
 

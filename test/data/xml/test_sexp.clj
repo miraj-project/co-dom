@@ -9,8 +9,8 @@
 (ns ^{:doc "Tests for reading [:tag {:attr 'value} body*] as XML."
       :author "Alan Malloy"}
   data.xml.test-sexp
+  (:require [miraj.markup :refer :all :exclude [import require]])
   (:use clojure.test
-        miraj.markup
         [data.xml.test-utils :only (test-stream lazy-parse*)]))
 
 (deftest as-element

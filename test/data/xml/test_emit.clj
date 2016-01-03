@@ -9,8 +9,8 @@
 (ns ^{:doc "Tests for emit to print XML text."
       :author "Chris Houser"}
   data.xml.test-emit
+  (:require [miraj.markup :refer :all :exclude [import require]])
   (:use clojure.test
-        miraj.markup
         [data.xml.test-utils :only (test-stream lazy-parse*)]))
 
 (def deep-tree
@@ -36,7 +36,7 @@
                       "</a>")]
       (is (= expect (emit-str deep-tree :with-xml-declaration true)))))
 
-  (testing "namespaced defaults"
+  #_(testing "namespaced defaults"
     (let [expect (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bar item=\"1\"><baz item=\"2\">done</baz></bar>")]
       (is (= expect (emit-str
                      (element "foo/bar" {"foo/item" 1} (element "foo/baz" {"foo/item" 2} "done"))

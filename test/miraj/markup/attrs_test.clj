@@ -9,8 +9,11 @@
 (ns ^{:doc "Test attribute handing"
       :author "Gregg Reynolds"}
   miraj.markup.attrs-test
-  (:require [clojure.java.io :as io]
+  (:refer-clojure :exclude [import require])
+  (:require ;;[org.clojure/clojure "1.8.0-RC4"]
+            [clojure.java.io :as io]
             [clojure.test :refer :all]
+;;            [miraj.html :as h]
             [miraj.markup :refer :all]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -37,20 +40,20 @@
 ;; e.g. :bookmark, :prefetch, :stylesheet, :sidebar.
 
 (deftest ^:attrs namecase-0
-  (testing "HTML attr names are case-insensitive.  Currently we only allow camel-case (lower-case with dashes); this will be relaxed in a later version."
+  (testing "OBSOLETE: HTML attr names are case-insensitive.  Currently we only allow camel-case (lower-case with dashes); this will be relaxed in a later version."
     (let [e (element :div {:fooBar "baz"})]
       (is (= e #miraj.markup.Element{:tag :div, :attrs {:fooBar "baz"}, :content ()}))
       (is (= (serialize :xml e) "<div fooBar=\"baz\"></div>"))
-      (is (thrown-with-msg? Exception #"HTML attribute names are case-insensitive; currently, only lower-case is allowed."
+      #_(is (thrown-with-msg? Exception #"HTML attribute names are case-insensitive; currently, only lower-case is allowed."
                             (serialize e)))
-      (is (thrown? Exception (serialize (element :div {:aB "foo"})))))))
+      #_(is (thrown? Exception (serialize (element :div {:aB "foo"})))))))
 
 (deftest ^:attrs namecase-1
-  (testing "HTML serialization converts clojure-case attr names."
+  (testing "OBSOLETE: HTML serialization converts clojure-case attr names."
     (let [e (element :div {:context-menu "foo"})]
       (is (= e #miraj.markup.Element{:tag :div, :attrs {:context-menu "foo"}, :content ()}))
       (is (= (serialize :xml e) "<div context-menu=\"foo\"></div>"))
-      (is (= (serialize e) "<div contextmenu=\"foo\"></div>")))))
+      #_(is (= (serialize e) "<div contextmenu=\"foo\"></div>")))))
 
 ;; Boolean attributes.  An HTML boolean attribute is an attribute
 ;; without a value.  Use nil as attrib value to express this.
@@ -59,20 +62,20 @@
     (is (= e #miraj.markup.Element{:tag :body, :attrs {:unresolved nil}, :content ()}))
     (is (= (serialize e) "<body unresolved></body>"))))
 
-(deftest ^:attrs bool-2
-  (testing "XML serialization barfs on boolean attribs."
-    (is (thrown-with-msg? Exception #"Clojure nil attribute val disallowed"
-                          (serialize :xml  (element :body {:unresolved nil}))))))
+;; (deftest ^:attrs bool-2
+;;   (testing "XML serialization barfs on boolean attribs."
+;;     (is (thrown-with-msg? Exception #"Clojure nil attribute val disallowed"
+;;                           (serialize :xml  (element :body {:unresolved nil}))))))
 
 ;; Enumerated attribute values.  HTML5 defines restrictions on some
 ;; attributes; for example, the "rel" attribute values must come from
 ;; a list of link types.  Serialization validates (some of) these.
-(deftest ^:attrs attr-4
+(deftest ^:attrs val-4
   (let [e (element :link {:rel "author"})]
     (is (= e #miraj.markup.Element{:tag :link, :attrs {:rel "author"}, :content ()}))
     (is (= (serialize e) "<link rel=\"author\">"))))
 
-(deftest ^:attrs attr-5
+(deftest ^:attrs val-5
   (testing "Strings and keywords allowed for vals for :rel attrib.
   NOTE: the assumption is that we do not want to use Polymer two-way
   binding for this attribute, e.g. rel='{{foo}}'.  If that turns out
@@ -80,10 +83,36 @@
     (is (= (serialize (element :link {:rel :stylesheet}) "<link rel=\"stylesheet\">")))
     (is (= (serialize (element :link {:rel "stylesheet"}) "<link rel=\"stylesheet\">")))))
 
-(deftest ^:attrs attr-6
+(deftest ^:attrs val-6
   (let [e (element :link {:rel "foo"})]
     (is (thrown-with-msg? Exception #"Invalid link type value for rel attribute:"
                           (serialize e)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; shortcuts
+(deftest ^:attrs ^:sugar sugar-1
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::foo)) "<span id=\"foo\"></span>"))))
+
+(deftest ^:attrs ^:sugar sugar-2
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::.foo)) "<span class=\"foo\"></span>"))))
+
+(deftest ^:attrs ^:sugar sugar-3
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::foo.bar)) "<span id=\"foo\" class=\"bar\"></span>"))))
+
+(deftest ^:attrs ^:sugar sugar-4
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::foo "bar")) "<span id=\"foo\">bar</span>"))))
+
+(deftest ^:attrs ^:sugar sugar-5
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::.foo "bar")) "<span class=\"foo\">bar</span>"))))
+
+(deftest ^:attrs ^:sugar sugar-6
+  (testing "id shortcut"
+    (is (= (serialize (element :span ::foo.bar "baz")) "<span id=\"foo\" class=\"bar\">baz</span>"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Polymer annotations.  Symbol attribute values serialize as [[one-way]]
@@ -96,9 +125,21 @@
           "<div class=\"[[secret]]\"></div>"))))
 
 (deftest ^:attrs annot-2
+  (testing "Polymer one-way annotation"
+    (let [e (element :div {:class 'secret} 'foo)]
+      (is (= (serialize e))
+          "<div class=\"[[secret]]\">[[foo]]</div>"))))
+
+(deftest ^:attrs annot-3
   (testing "Polymer two-way annotation"
     (let [e (element :div {:class :secret})]
       (is (= (serialize e))
           "<div class=\"{{secret}}\"></div>"))))
+
+(deftest ^:attrs annot-4
+  (testing "Polymer two-way annotation"
+    (let [e (element :div {:class :secret} :foo)]
+      (is (= (serialize e))
+          "<div class=\"{{secret}}\">{{foo}}</div>"))))
 
 

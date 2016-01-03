@@ -9,9 +9,9 @@
 (ns ^{:doc "Test that external entities are not resolved by default, see https://www.owasp.org/index.php/XML_External_Entity_(XXE)_Processing"
       :author "Carlo Sciolla"}
   data.xml.test-entities
-  (:use clojure.test
-        miraj.markup)
-  (:require [clojure.java.io :as io]))
+  (:require [miraj.markup :refer :all :exclude [import require]])
+  (:require [clojure.java.io :as io])
+  (:use clojure.test))
 
 (defn vulnerable-input
   "Creates an XML with an external entity referring to the given URL"
