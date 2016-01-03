@@ -145,7 +145,7 @@
         (.writeAttribute writer attr-ns attr-name attr-val)
         (.writeAttribute writer attr-name attr-val)))))
 
-(declare serialize)
+(declare serialize serialize-impl)
 
 ; Represents a node of an XML tree
 (defrecord Element [tag attrs content]
@@ -188,7 +188,7 @@
   (str
    "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
    "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes' cdata-section-elements='script style'/>"
 
    "<xsl:template match='node()'>"
      "<xsl:copy>"
@@ -218,6 +218,24 @@
        "<xsl:apply-templates select='@*|node()'/>"
        "_EMPTY_333109"
      "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='script' priority='999'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+       "<xsl:if test='not(node()) and not(string(.))'>"
+         "_EMPTY_333109"
+       "</xsl:if>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='script/text()' priority='999'>"
+     "<xsl:text disable-output-escaping='yes'>"
+       "<xsl:value-of select='.'/>"
+     ;; "<xsl:copy>"
+       ;; "<xsl:apply-templates select='@*|node()'/>"
+     ;; "</xsl:copy>"
+     "</xsl:text>"
    "</xsl:template>"
 
    "<xsl:template match=\"@*\">"
@@ -257,6 +275,91 @@
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
+   "</xsl:stylesheet>"))
+
+(def xsl-normalize
+  (str
+   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
+   "<xsl:strip-space elements='*' />"
+   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
+
+   "<xsl:template match='html' priority='99'>"
+     "<xsl:copy>"
+       "<head>"
+         "<xsl:choose>"
+           "<xsl:when test='meta[@name=\"charset\"]'>"
+             "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='charset'/>"
+           "</xsl:when>"
+           "<xsl:otherwise>"
+             "<meta name='charset' content='utf-8'/>"
+           "</xsl:otherwise>"
+         "</xsl:choose>"
+         "<xsl:apply-templates select='link|meta|style' mode='head'/>"
+         "<xsl:apply-templates select='head/link|head/meta|head/style' mode='head'/>"
+         "<xsl:apply-templates select='script|head/script' mode='head'/>"
+       "</head>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='head'/>"
+   "<xsl:template match='head' mode='head'>"
+     "<xsl:apply-templates select='@*|node()' mode='head'/>"
+   "</xsl:template>"
+
+   "<xsl:template match='meta[@name=\"charset\"]' priority='99'/>"
+   "<xsl:template match='meta[@name=\"charset\"]' mode='head'/>"
+   "<xsl:template match='meta[@name=\"charset\"]' mode='charset'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='@*|node()'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='link|meta|script|style'/>"
+   "<xsl:template match='link|meta|script|style' mode='head'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='body//style' priority='99'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   "<xsl:template match='body//script' priority='99'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+   "</xsl:template>"
+
+   ;; ;; "<xsl:template match='script'/>"
+   ;; "<xsl:template match='script/text()'>"
+   ;;   "<xsl:text disable-output-escaping='yes'>"
+   ;;   "FOO &amp; BAR"
+   ;;   "<xsl:copy>"
+   ;;     "<xsl:apply-templates select='@*|node()'/>"
+   ;;   "</xsl:copy>"
+   ;;   "</xsl:text>"
+   ;; "</xsl:template>"
+
+   ;; "<xsl:template match='style/text()'>"
+   ;;   "<xsl:text disable-output-escaping='yes'>"
+   ;;   "FOO &lt; BAR"
+   ;;     ;; "<xsl:copy>"
+   ;;     ;;   "<xsl:apply-templates select='@*|node()'/>"
+   ;;     ;; "</xsl:copy>"
+   ;;   "</xsl:text>"
+   ;; "</xsl:template>"
+
+   "<xsl:template match='body//link' priority='99' mode='head'/>"
    "</xsl:stylesheet>"))
 
 ;; from http://webcomponents.org/polyfills/ :
@@ -334,6 +437,8 @@
              (if (not (instance? miraj.markup.Element elts))
                (do (println (type elts))
                    (throw (Exception. "xsl-xform only works on clojure.data.xml.Element"))))
+             (println "xforming elts: " (type elts))
+             ;; (serialize-impl elts))
              (serialize :xml elts))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -341,10 +446,11 @@
         transformer (.newTransformer factory (StreamSource. (StringReader. ss)))]
     ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
     ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
+    (println "FOOBAZ")
     (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
-
+    (println "FOOBARBAZ")
     (.transform transformer xmlSource xmlOutput)
     (parse-str (.toString (.getWriter xmlOutput)))))
     ;; (.toString (.getWriter xmlOutput))))
@@ -401,6 +507,8 @@
                      void (.flush string-writer)
                      s (str/replace s #"VOID<[^>]+>" "")
                      s (str/replace s #"_EMPTY_333109" "")
+                     s (str/replace s #"<!\[CDATA\[" "")
+                     s (str/replace s #"]]>" "")
                      regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
                  ;; boolean attribs: value must be "" or must match attrib name
                  ;;FIXME: make this more robust
@@ -418,6 +526,110 @@
     (if (nil? (first elts))
       nil
       (apply pprint-impl elts))))
+
+(defn serialize-impl
+  [& elts]
+  (println "serialize-impl: " #_elts)
+  (let [s (if (or (= :html (first elts))
+                  (= :xml (first elts)))
+            (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
+                (rest elts))
+            (if (keyword? (first elts))
+              (throw (Exception. "only :html and :xml supported"))
+              elts))
+        fmt (if (keyword? (first elts)) (first elts) :html)
+        void (reset! mode fmt)
+        _ (println "mode: " @mode)
+        ;; always serialize to xml, deal with html issues in the transform
+        ml (if (string? s)
+             (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))
+             (if (> (count s) 1)
+               (throw (Exception. "forest input not yet supported for serialize"))
+               (let [s (serialize :xml s)]
+                 (reset! mode fmt)
+                 s)))
+        xmlSource (StreamSource.  (StringReader. ml))
+        xmlOutput (StreamResult.
+                   (let [sw (StringWriter.)]
+                     (if (.startsWith ml "<!doctype")
+                       (.write sw "<!doctype html>\n"))
+                     sw))
+        factory (TransformerFactory/newInstance)
+        transformer (if (= :html @mode)
+                      (do
+                        (println "transforming with xsl-identity-transform-html")
+                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
+                      (do
+                        ;;(log/trace "transforming with xsl-identity-transform-xml")
+                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
+    ;;                      (.newTransformer factory))]
+    ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
+    ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
+    (if (.startsWith ml "<?xml")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
+      (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
+
+    (.transform transformer xmlSource xmlOutput)
+    (let[result (if (= :html fmt)
+                                        ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
+                  (let [string-writer (.getWriter xmlOutput)
+                        s (.toString string-writer)
+                        void (.flush string-writer)
+                        s (str/replace s #"VOID<[^>]+>" "")
+                        s (str/replace s #"_EMPTY_333109" "")
+                        s (str/replace s #"<!\[CDATA\[" "")
+                        s (str/replace s #"]]>" "")
+                        regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
+                    ;; boolean attribs: value must be "" or must match attrib name
+                    ;;FIXME: make this more robust
+                    (str/replace s regx ""))
+                  (do (println "XML FOOBAR")
+                      (.toString (.getWriter xmlOutput))))]
+      result)))
+
+(defn serialize
+  "Serializes the Element to String and returns it.
+   Options:
+    mode:  :html (default) or :xml
+    :encoding <str>          Character encoding to use
+    :with-xml-declaration <bool>, default false"
+  ;; [& args]
+  [& elts]
+  (println "serialize: " elts)
+  (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
+               (rest elts)
+               (if (keyword? (first elts))
+                 (throw (Exception. "only :html and :xml supported"))
+                 elts))
+        fmt (if (keyword? (first elts)) (first elts) :html)
+        ^java.io.StringWriter
+        string-writer (java.io.StringWriter.)]
+    (reset! mode fmt)
+    (println "serializing to" @mode ": " args)
+    (let [doc-str (cond
+                    (= @mode :html)
+                    (do ;(log/trace "emitting HTML: " args)
+                      ;; (if (= :html (:tag (first args)))
+                      ;;   (.write string-writer "<!DOCTYPE html>"))
+                      (apply serialize-impl elts))
+                    ;; (emit args string-writer :html true :with-xml-declaration false))
+
+                    (= @mode :xml)
+                    (do (println "emiting XML")
+                      ;; (apply serialize-impl elts))
+                      (if (= :with-xml-declaration (first args))
+                        (do ;(log/trace "emitting with xml decl: " args)
+                          (emit (rest args) string-writer :with-xml-declaration true))
+                        (do ;(log/trace "emitting w/o xml decl: " args)
+                          (emit args string-writer :with-xml-declaration false))))
+                    :else
+                    (throw (Exception. "invalid mode: " @mode)))]
+      (.toString doc-str))))
+    ;; (str (if (= @mode :html)
+    ;;        (let [s (str/replace (.toString string-writer) #"VOID<[^>]+>" "")
+    ;;              regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
+    ;;              (str/replace s regx ""))
+    ;;        (.toString string-writer)))))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   ;; (println "emit-start-tag: " (:name event))
@@ -449,6 +661,7 @@
       (= s "")))
 
 (defn emit-cdata [^String cdata-str ^javax.xml.stream.XMLStreamWriter writer]
+  (println "EMIT-CDATA " cdata-str)
   (when-not (str-empty? cdata-str)
     (let [idx (.indexOf cdata-str "]]>")]
       (if (= idx -1)
@@ -474,6 +687,7 @@
                (.write writer (:str event)))       ; writes without escaping < & etc.
              )
     (.writeCharacters stream-writer (:str event))
+;;    (.write writer (str ">" (:str event)))       ; writes without escaping < & etc.
 
     :kw (.writeCharacters stream-writer (:str event))
     :sym (.writeCharacters stream-writer (:str event))
@@ -526,10 +740,10 @@
     (let [nm (name kw)
           ns (namespace kw)]
       (Event. :kw nil nil
+                (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]"))))
               ;; FIXME this should not be necessary if the tag fns are correct:
-              (if (nil? (namespace kw))
-                (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")
-                (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
+              ;; (if (nil? (namespace kw))
+              ;;   (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
 
   (next-events [_ next-items]
     next-items)
@@ -591,13 +805,54 @@
        (cons f
              (flatten-elements (next-events e (rest elements)))))))))
 
+(defn parse-elt-args
+  [attrs content]
+  ;(println "parse-elt-args ATTRS: " attrs " CONTENT: " content)
+  ;; (let [fst attrs] ;; (first args)]
+    (cond
+      (keyword? attrs)
+      (do ;;(println "keyword? attrs: " attrs)
+          ;; (span :foo) => <span>[[foo]]</span>
+          (if (nil? (namespace attrs))
+            {}
+            ;; (span ::foo) => <span id="foo"></span>
+            ;; (span ::foo.bar) => <span id="foo" class="bar"></span>
+            ;; (span ::.foo.bar) => <span class="foo bar"></span>
+            (let [tokstr (name attrs)
+                  no-id (.startsWith tokstr ".")
+                  toks (filter identity (str/split tokstr #"\."))
+                  attrs (first toks)]
+              (doall toks)
+              ;; (println "TOKS: " toks attrs)
+              ;; (println "REST TOKS: " (rest toks))
+              (if no-id
+                [{:class (str/trim (str/join " " toks))} content]
+                (if (seq (rest toks))
+                  [{:id attrs :class (str/trim (str/join " " (rest toks)))} content]
+                  [{:id attrs} content])))))
+
+      (map? attrs)
+      (do ;;(println "map? attrs")
+        (if (instance? miraj.markup.Element attrs)
+          (do ;;(println "Element instance")
+            [{} (remove empty? (list attrs content))])
+          (do ;;(println "NOT Element instance")
+            [attrs content])))
+
+      :else (do ;(println "NOT map attrs: " attrs)
+                [{} (remove empty? (list attrs content))])))
+
 (defn element [tag & [attrs & content]]
-  ;;(println "ELEMENT: " tag attrs content)
-  (let [e (if (= (type attrs) miraj.markup.Element)
-            (Element. tag {} (remove nil? (apply list attrs content)))
-            (if (map? attrs)
-              (Element. tag (or attrs {}) (flatten (remove nil? content)))
-              (Element. tag {} (remove nil? (apply list attrs)))))]
+  ;; (println "ELEMENT: TAG: " tag " ATTRS: " attrs " CONTENT: " content)
+  (let [[attribs contents] (parse-elt-args (or attrs {}) (or content '()))
+        ;; _ (println "ATTRIBS: " attribs)
+        ;; _ (println "CONTENT: " content)
+        e (Element. tag (or attribs {}) (or contents '()))]
+        ;; e (if (= (type attrs) miraj.markup.Element)
+        ;;     (Element. tag {} (remove nil? (apply list attrs content)))
+        ;;     (if (map? attrs)
+        ;;       (Element. tag (or attrs {}) (flatten (remove nil? content)))
+        ;;       (Element. tag {} (remove nil? (apply list attrs)))))]
     #_(println "E: " e)
     e))
 
@@ -834,11 +1089,10 @@
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   [e ^java.io.Writer writer & {:as opts}]
-  ;; (println "emit: " e " OPTS: " opts)
+  (println "emit: " e " OPTS: " opts)
   (let [^javax.xml.stream.XMLStreamWriter stream-writer
         (-> (javax.xml.stream.XMLOutputFactory/newInstance)
             (.createXMLStreamWriter writer))]
-
     (when (instance? java.io.OutputStreamWriter writer)
       (check-stream-encoding writer (or (:encoding opts) "UTF-8")))
 
@@ -862,48 +1116,6 @@
   (let [^java.io.StringWriter sw (java.io.StringWriter.)]
     (apply emit e sw opts)
     (.toString sw)))
-
-(defn serialize
-  "Serializes the Element to String and returns it.
-   Options:
-    mode:  :html (default) or :xml
-    :encoding <str>          Character encoding to use
-    :with-xml-declaration <bool>, default false"
-  ;; [& args]
-  [& elts]
-  ;; (println "serialize: " elts)
-  (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
-               (rest elts)
-               (if (keyword? (first elts))
-                 (throw (Exception. "only :html and :xml supported"))
-                 elts))
-        fmt (if (keyword? (first elts)) (first elts) :html)
-        ^java.io.StringWriter
-        string-writer (java.io.StringWriter.)]
-    (reset! mode fmt)
-    ;; (println "serializing to" @mode ": " args)
-    (cond
-      (= @mode :html)
-      (do ;(log/trace "emitting HTML: " args)
-        (if (= :html (:tag (first args)))
-          (.write string-writer "<!doctype html>"))
-        (emit args string-writer :html true :with-xml-declaration false))
-
-      (= @mode :xml)
-      (do ;(log/trace "emiting XML")
-          (if (= :with-xml-declaration (first args))
-            (do ;(log/trace "emitting with xml decl: " args)
-                (emit (rest args) string-writer :with-xml-declaration true))
-            (do ;(log/trace "emitting w/o xml decl: " args)
-                (emit args string-writer :with-xml-declaration false))))
-      :else
-      (throw (Exception. "invalid mode: " @mode)))
-    (str (if (= @mode :html)
-           (let [s (str/replace (.toString string-writer) #"VOID<[^>]+>" "")
-                 regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
-                 (str/replace s regx ""))
-           (.toString string-writer)))))
-;; (.toString string-writer)))
 
 (defn ^javax.xml.transform.Transformer indenting-transformer []
   (doto (-> (javax.xml.transform.TransformerFactory/newInstance) .newTransformer)
@@ -1065,42 +1277,11 @@
             ;; #_(println (macroexpand func))
             ;; (eval func))))))
 
-(defn get-attrs-for-tag
-  [args]
-  (println "get-attrs-for-tag" args)
-  (let [fst (first args)]
-    (cond
-      (keyword? fst)
-      (do (println "keyword? fst: " fst)
-          (if (nil? (namespace fst))
-            {}
-            (let [tokstr (name fst)
-                  no-id (.startsWith tokstr ".")
-                  toks (filter identity (str/split tokstr #"\."))
-                  fst (first toks)]
-              (doall toks)
-              (println "TOKS: " toks fst)
-              (if no-id
-                {:class (str/join " " toks)}
-                {:id fst
-                 :class (str/join " " (rest toks))}))))
-
-      (map? fst)
-      (do ;(log/trace "map? fst")
-        (if (instance? miraj.markup.Element fst)
-          (do ;(log/trace "Element instance")
-            {})
-          (do ;(log/trace "NOT Element instance")
-            fst)))
-
-      :else (do (println "NOT map? fst: " fst)
-                {}))))
-
 (defn make-tag-fns
   [pfx tags sfx]
-  (println "make-tag-fns " pfx tags sfx)
+  ;; (println "make-tag-fns " pfx tags sfx)
   (doseq [tag tags]
-    (do (println "make-tag-fn " tag)
+    (do ;;(println "make-tag-fn " tag)
         (let [fn-tag (cond
                      (string? tag) (symbol tag)
                      (vector? tag) (symbol (last tag)))
@@ -1110,22 +1291,23 @@
               ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
                       [& parms#]
-                      (println "HTML FN: " ~elt (pr-str parms#))
+                      ;; (println "HTML FN: " ~elt (pr-str parms#))
                       (let [args# (flatten parms#)]
-                        (println "HTML FLAT: " ~elt (pr-str (flatten args#)))
+                        ;; (println "HTML FLAT: " ~elt (pr-str (flatten args#)))
                         (if (empty? args#)
                           (element ~elt)
                           (let [first# (first args#)
-                                attrs# (get-attrs-for-tag args#)
-                                content# (if (map? first#)
-                                           (if (instance? miraj.markup.Element first#)
-                                             args#
-                                             (rest args#))
-                                           (if (keyword? first#)
-                                             (if (nil? (namespace first#))
-                                               args#
-                                               (rest args#))
-                                             args#))
+                                rest# (rest args#)
+                                [attrs# content#] (parse-elt-args first# rest#)
+                                ;; content# (if (map? first#)
+                                ;;            (if (instance? miraj.markup.Element first#)
+                                ;;              args#
+                                ;;              (rest args#))
+                                ;;            (if (keyword? first#)
+                                ;;              (if (nil? (namespace first#))
+                                ;;                args#
+                                ;;                (rest args#))
+                                ;;              args#))
                                 func# (with-meta (apply element ~elt attrs# content#)
                                         {:co-fn true
                                          :elt-kw ~elt
@@ -1354,68 +1536,7 @@
               _ (println "nsp: " nsp)
               _ (println "ns-type: " ns-type)
               ]
-          (println "FOOB")
           (get-resource-elt ns-type nsp ref-sym comp))))))
-
-(def xsl-normalize
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
-
-   "<xsl:template match='html' priority='99'>"
-     "<xsl:copy>"
-       "<head>"
-         "<xsl:choose>"
-           "<xsl:when test='meta[@name=\"charset\"]'>"
-             "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='charset'/>"
-           "</xsl:when>"
-           "<xsl:otherwise>"
-             "<meta name='charset' content='utf-8'/>"
-           "</xsl:otherwise>"
-         "</xsl:choose>"
-         "<xsl:apply-templates select='link|meta|script|style' mode='head'/>"
-         "<xsl:apply-templates select='head/link|head/meta|head/script|head/style' mode='head'/>"
-       "</head>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='head'/>"
-   "<xsl:template match='head' mode='head'>"
-     "<xsl:apply-templates select='@*|node()' mode='head'/>"
-   "</xsl:template>"
-
-   "<xsl:template match='meta[@name=\"charset\"]' priority='99'/>"
-   "<xsl:template match='meta[@name=\"charset\"]' mode='head'/>"
-   "<xsl:template match='meta[@name=\"charset\"]' mode='charset'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='@*|node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='link|meta|script|style'/>"
-   "<xsl:template match='link|meta|script|style' mode='head'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   ;; "<xsl:template match='script'/>"
-   ;; "<xsl:template match='script' mode='head'>"
-   ;;   "<xsl:copy>"
-   ;;     "<xsl:apply-templates select='@*|node()'/>"
-   ;;   "</xsl:copy>"
-   ;; "</xsl:template>"
-
-   "<xsl:template match='body//link' priority='99' mode='head'/>"
-   "</xsl:stylesheet>"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1606,7 +1727,7 @@
                                              (println "tag: " tag)
                                              (println "this-tag: " this-tag)
                                              (if (:compound (clojure.core/meta rule))
-                                               (do ;;(println "FOOBAR")
+                                               (do
                                                    (let [nm (if (= "platform-" tag)
                                                               (str this-tag "-" k-tag)
                                                               (str tag this-tag "-" k-tag))
@@ -1712,7 +1833,7 @@
                      (if meta-elts
                        (concat meta-elts content)
                        content))))
-        ;; _ (println "H: " h)
+        _ (println "H: " h)
         normh (apply xsl-xform xsl-normalize h)
         ]
     normh))
@@ -1758,17 +1879,17 @@
 
 (defmulti import-resource
   (fn [typ spec]
-    (println (str "IMPORT-RESOURCE: " typ " " spec))
+    ;; (println (str "IMPORT-RESOURCE: " typ " " spec))
     typ))
 
 (defmethod import-resource :default
   [typ spec]
-  (println "import-resource :default: " typ spec)
+  ;; (println "import-resource :default: " typ spec)
   (element :FAKEELEMENT))
 
 (defmethod import-resource :css
   [typ spec]
-  (println "import-resource :css: " typ spec)
+  ;; (println "import-resource :css: " typ spec)
   (let [nsp (first spec)
         import-ns (find-ns nsp)
         _ (println "import ns: " import-ns)
@@ -1811,30 +1932,35 @@
 
 (defmethod import-resource :js
   [typ spec]
-  (println "import-resource :js: " typ spec)
+  ;; (println "import-resource :js: " typ spec)
   (let [nsp (first spec)
         import-ns (find-ns nsp)
-        _ (println "import ns: " import-ns)
-        _ (println "import ns meta: " (meta import-ns))
+        ;; _ (println "import ns: " import-ns)
+        ;; _ (println "import ns meta: " (meta import-ns))
+        _ (clojure.core/require nsp)
         resource-type (:resource-type (meta import-ns))
         scripts (rest spec)
-        _ (println "scripts : " scripts)
+        ;; _ (println "scripts : " scripts)
         result (into '()
                      (for [script (reverse scripts)]
-                       (do (println "script name: " script)
+                       (do ;;(println "script name: " script)
                            (let [script-sym (symbol
                                              (str (ns-name import-ns)) (str script))
-                                 _ (println "script-sym: " script-sym)
-                                 script-ref (deref (find-var script-sym))
-                                 _ (println "script ref: " script-ref)
+                                 ;; _ (println "script-sym: " script-sym)
+                                 ;; script-ref (deref (find-var script-sym))
+                                 script-ref (if-let [sref (find-var script-sym)]
+                                             (deref sref)
+                                             (throw (Exception. (str "Javascript resource '" script-sym "' not found; referenced by 'import' spec: " spec "; configured by " import-ns))))
+                                 ;; _ (println "script ref: " script-ref)
                                  uri (:uri script-ref)
-                                 _ (println "uri: " uri)
+                                 ;; _ (println "uri: " uri)
                                  iores (validate-js-resource uri spec)
-                                 _ (println "IO RES: " iores)]
+                                 ;; _ (println "IO RES: " iores)
+                                 ]
                              (element :script {:type "text/javascript"
                                                :src uri})))))]
-    (doall result)
-    (println "RESULT: " result)
+    ;; (doall result)
+    ;; (println "RESULT: " result)
     result))
 
 (defmethod import-resource :polymer-style-module
@@ -1872,19 +1998,19 @@
 
 (defn get-import
   [import]
-  (println (str "get-import: " import))
-  (println (str "ns: " (first import) " " (type (first import))))
+  ;; (println (str "get-import: " import))
+  ;; (println (str "ns: " (first import) " " (type (first import))))
   (let [nsp (first import)]
     (clojure.core/require nsp)
     (let [import-ns (find-ns nsp)
           resource-type (:resource-type (meta import-ns))]
-    (println "import ns: " nsp (meta nsp))
-    (println "import resource type: " resource-type)
+    ;; (println "import ns: " nsp (meta nsp))
+    ;; (println "import resource type: " resource-type)
     (import-resource resource-type import))))
 
 (defmacro import
   [& args]
-  (println "import: " args)
+  ;; (println "import: " args)
   ;; (for [arg args]
     ;; `(do
     ;;    (println "IMPORTing: " ~arg)
@@ -1893,15 +2019,15 @@
     ;;      imports#))))
 
     `(do
-       (println "IMPORTING: " [~@args])
+       ;; (println "IMPORTING: " [~@args])
        (let [reqs# (for [arg# [~@args]]
-                     (do (println "GET-IMP: " arg#)
+                     (do ;;(println "GET-IMP: " arg#)
                          (let [r# (get-import arg#)]
                            ;; force realization, for printlns
                            (doall r#)
                            r#)))]
          ;; force realization of lazy seq, so printlns will work
-         (doall reqs#)
+         ;; (doall reqs#)
          ;;(println "IMPORTed: " reqs#)
          reqs#)))
 
