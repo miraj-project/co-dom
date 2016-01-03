@@ -523,7 +523,7 @@
 
 (defn serialize-impl
   [& elts]
-  ;; (println "serialize-impl: " #_elts)
+  ;; (println "serialize-impl: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -812,15 +812,16 @@
   ;; (println "parse-elt-args ATTRS: " attrs " CONTENT: " content)
   ;; (let [fst attrs] ;; (first args)]
     (cond
+      ;;TODO support boolean, etc. for CDATA elts
       (number? attrs)
       (do ;;(println "number? attrs: " attrs)
           ;; (span 3) => <span>3</span>
-        [{} (list attrs content)])
+        [{} (remove empty? (list (str attrs) content))])
 
       (symbol? attrs)
       (do ;;(println "keyword? attrs: " attrs)
           ;; (span 'foo) => <span>{{foo}}</span>
-        [{} (list attrs content)])
+        [{} (remove empty? (list attrs content))])
 
       (keyword? attrs)
       (do ;;(println "keyword? attrs: " attrs)

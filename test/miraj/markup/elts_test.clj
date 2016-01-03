@@ -155,3 +155,12 @@
     (is (= (serialize (element :script (+ 1 2)))
            "<script>3</script>"))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; clojure vals
+(deftest ^:elts clj-1
+  (testing "clojure vals"
+    (is (= (serialize (element :span 3))
+           "<span>3</span>"))
+    (is (= (serialize (element :span (+ 1 2)))
+           "<span>3</span>"))))
+
