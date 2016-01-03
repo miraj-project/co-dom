@@ -24,4 +24,5 @@
   :test-selectors {:attrs :attrs
                    :docs :docs
                    :elts :elts
-                   :html :html})
+                   :html :html
+                   :sugar :sugar})
