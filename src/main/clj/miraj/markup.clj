@@ -1,4 +1,3 @@
-;;(println "loading miraj.markup")
 ;   Copyright (c) Rich Hickey. All rights reserved.
 ;   The use and distribution terms for this software are covered by the
 ;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
@@ -390,7 +389,7 @@
    "<xsl:template match='head'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='optimize'/>"
-       "<xsl:apply-templates select='.//script' mode='polyfill'/>"
+       "<xsl:apply-templates select='//script' mode='polyfill'/>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
@@ -411,7 +410,8 @@
 
    ;;FIXME - put webcomponentsjs after all <meta> elts?
    ;; (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"})
-   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>"
+   "<xsl:template match='script' mode='polyfill'/>"
+   ;; "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>"
    "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize' priority='99'/>"
    "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill' priority='99'>"
      "<xsl:copy>"
