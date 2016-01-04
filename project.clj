@@ -4,7 +4,7 @@
   :source-paths ["src/main/clj"]
   :dependencies [[org.clojure/clojure "1.8.0-RC4"]]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
-                   :source-paths ["src/main/clj" "src/test/clj" "dev"]
+                   :source-paths ["src/main/clj"] ;; "src/test/clj" "dev"]
                    :dependencies [[polymer/paper "1.2.3-SNAPSHOT"]
                                   [polymer/iron "1.2.3-SNAPSHOT"]
                                   [miraj/html "5.1.0-SNAPSHOT"]

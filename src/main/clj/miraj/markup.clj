@@ -1,3 +1,4 @@
+;;(println "loading miraj.markup")
 ;   Copyright (c) Rich Hickey. All rights reserved.
 ;   The use and distribution terms for this software are covered by the
 ;   Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
@@ -1304,7 +1305,7 @@
               ;; log (println "make-tag-fns fn-tag: " fn-tag " (" (type fn-tag) ")")
               func `(defn ~fn-tag ;; (symbol (str tag))
                       [& parms#]
-                      (println "HTML FN: " ~elt (pr-str parms#))
+                      ;; (println "HTML FN: " ~elt) ;; (pr-str parms#))
                       (let [args# (flatten parms#)]
                         ;; (println "HTML FLAT: " ~elt (pr-str (flatten args#)))
                         (if (empty? args#)
@@ -1475,48 +1476,48 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmulti get-resource-elt
   (fn [typ nsp sym spec]
-    (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
+    ;; (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
     typ))
 
 (defmethod get-resource-elt :default
   [typ nsp sym spec]
-  (println
-   (str "get-resource-elt :default: " typ " " nsp " " sym))
+  ;; (println (str "get-resource-elt :default: " typ " " nsp " " sym))
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
   ;; (element :link {:rel "import" :href uri}))
 
 (defmethod get-resource-elt :polymer
   [typ nsp sym spec]
-  (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
+  ;; (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
   (let [pfx (:resource-pfx (meta nsp))
         path (:elt-uri (:miraj (meta (find-var sym))))
         uri (str pfx "/" path)]
-    (print "meta: " (meta (find-var sym)))
-    (print "miraj: " (keys (meta (find-var sym))))
-    (print "uri: " uri)
-    (let [iores (if-let [res (io/resource uri)]
-                  res (throw (Exception.
-                              (str/join "\n"
-                                        ["Polymer resource: "
-                                         (str \tab uri)
-                                         "not found in classpath; referenced by 'require' spec:"
-                                         (str \tab spec \newline)]))))
-          _ (println "IO RES: " iores)]
-      (element :link {:rel "import" :href uri}))))
+    ;; (print "meta: " (meta (find-var sym)))
+    ;; (print "miraj: " (keys (meta (find-var sym))))
+    ;; (print "uri: " uri)
+    ;; (let [iores (if-let [res (io/resource uri)]
+    ;;               res (throw (Exception.
+    ;;                           (str/join "\n"
+    ;;                                     ["Polymer resource: "
+    ;;                                      (str \tab uri)
+    ;;                                      "not found in classpath; referenced by 'require' spec:"
+    ;;                                      (str \tab spec \newline)]))))
+    ;;       ;; _ (println "IO RES: " iores)
+    ;;       ]
+      (element :link {:rel "import" :href uri})))
 
   ;; (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :link
   [typ nsp sym spec]
-  (println "get-resource-elt :link: " (str typ " " nsp " " sym))
+  ;; (println "get-resource-elt :link: " (str typ " " nsp " " sym))
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
 (defmethod get-resource-elt :css
 ;; FIXME: support all attribs
   [typ nsp sym spec]
-  (println "get-resource-elt :css: " (str typ " " nsp " " sym))
+  ;; (println "get-resource-elt :css: " (str typ " " nsp " " sym))
   (let [uri (deref (find-var sym))]
   (element :link {:rel "stylesheet" :href (:uri uri)
                   :media (if (:media uri) (:media uri) "all")})))
@@ -1524,30 +1525,30 @@
 (defmethod get-resource-elt :js
 ;;FIXME support all attribs
   [typ nsp sym spec]
-  (println "get-resource-elt :js: " (str typ " " nsp " " sym))
+  ;; (println "get-resource-elt :js: " (str typ " " nsp " " sym))
   (element :script {:src (deref (find-var sym))}))
 
 (defn require-resource
   [comp]
-  (println (str "require-resource: " comp))
+  ;; (println (str "require-resource: " comp))
   (let [nsp (find-ns (first comp))
-        _ (println "nsp: " nsp)
+        ;; _ (println "nsp: " nsp)
         options (apply hash-map (rest comp))
         as-opt (:as options)
         refer-opts (:refer options)
-        _ (println "component ns: " nsp (meta nsp))
+        ;; _ (println "component ns: " nsp (meta nsp))
         ]
     (if (nil? refer-opts)
       (element :link
                {:rel "import" :href (get-href nsp nil)})
       (for [ref refer-opts]
         (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-              _ (println "refsym: " ref-sym)
-              _ (println "refsym meta: " (meta (find-var ref-sym)))
-              _ (println "nsp meta: " (meta nsp))
+              ;; _ (println "refsym: " ref-sym)
+              ;; _ (println "refsym meta: " (meta (find-var ref-sym)))
+              ;; _ (println "nsp meta: " (meta nsp))
               ns-type (:resource-type (meta nsp))
-              _ (println "nsp: " nsp)
-              _ (println "ns-type: " ns-type)
+              ;; _ (println "nsp: " nsp)
+              ;; _ (println "ns-type: " ns-type)
               ]
           (get-resource-elt ns-type nsp ref-sym comp))))))
 
@@ -1696,18 +1697,18 @@
 
 (defn apply-meta-rule
   [tag key val ruleset]
-  (println (str "APPLY META RULE: " tag " | " key " | " val " | " ruleset))
+  ;; (println (str "APPLY META RULE: " tag " | " key " | " val " | " ruleset))
   (condp = key
     :viewport (do-viewport tag key val ruleset)
     (let [this-tag (if (= :ms key) "msapplication" (subs (str key) 1))
           result (for [[k v] val]
-                   (do (println "key: " k ", val: " v)
+                   (do ;;(println "key: " k ", val: " v)
                        (if-let [rule (get ruleset k)]
                          (let [k-tag (subs (str k) 1)]
-                           (println "rule: " rule)
+                           ;; (println "rule: " rule)
                            (cond
                              (keyword? rule)
-                             (do (println "meta keyword rule: " k ", " val ": " rule)
+                             (do ;;(println "meta keyword rule: " k ", " val ": " rule)
                                  (let [val-param (get val k)
                                        nm (if (= "platform-" tag)
                                             (str this-tag "-" k-tag)
@@ -1734,11 +1735,11 @@
                                    ;;(log/trace "elt: " elt)
                                    elt))
 
-                             (map? rule) (do (println "meta map key: " k)
-                                             (println "meta map val: " (get val k))
-                                             (println "rule: " rule)
-                                             (println "tag: " tag)
-                                             (println "this-tag: " this-tag)
+                             (map? rule) (do ;;(println "meta map key: " k)
+                                             ;; (println "meta map val: " (get val k))
+                                             ;; (println "rule: " rule)
+                                             ;; (println "tag: " tag)
+                                             ;; (println "this-tag: " this-tag)
                                              (if (:compound (clojure.core/meta rule))
                                                (do
                                                    (let [nm (if (= "platform-" tag)
@@ -1759,9 +1760,9 @@
                                                   k (get val k) rule)))
 
                              (set? rule)
-                             (do (println "meta set rule: " k rule)
+                             (do ;;(println "meta set rule: " k rule)
                                  (let [val-param (get val k)]
-                                   (println "val: " val-param)
+                                   ;; (println "val: " val-param)
                                    (if (contains? rule val-param)
                                      (let [nm (str tag this-tag "-" k-tag)
                                            content (subs (str val-param) 1)]
@@ -1793,12 +1794,12 @@
   ;; (println "HTML5-METAS " (keys html5-meta-attribs))
   (let [ms (for [[tag val] metas]
              (let [rule (get html5-meta-attribs tag)]
-               (println "META: " tag (pr-str val) " RULE: " rule)
+               ;; (println "META: " tag (pr-str val) " RULE: " rule)
                (if (nil? rule) (throw (Exception. (str "unknown meta name: " (str tag)))))
                (if (keyword? rule)
                  ;; FIXME: validation
                  (let [m (element :meta {:name (subs (str tag) 1) :content (str val)})]
-                   (println "META ELT: " m)
+                   ;; (println "META ELT: " m)
                    m)
                  (apply-meta-rule "" tag val rule))))]
                ;; (case tag
@@ -1826,7 +1827,7 @@
 
 (defn get-meta-elts
   [args]
-  (println "get-meta-elts: " args)
+  ;; (println "get-meta-elts: " args)
   (for [[k v] (apply meta args)]
     (element :meta {:name (kw->nm k)
                     :content (str v)})))
@@ -1837,7 +1838,7 @@
   ;; (println "normalize HTML args: " args)
   ;; (println "normalize HTML meta: " (apply meta args))
   (reset! mode :html)
-  (let [meta-elts (get-metas (:html-meta (apply meta args)))
+  (let [meta-elts (get-metas (dissoc (apply meta args) :elt-kw :elt-uri :co-fn))
         ;; _ (println "META-ELTS: " meta-elts)
         h (list
            (update (first args)
@@ -1857,12 +1858,12 @@
   (doseq [arg args]
     (eval
      (macroexpand
-      `(do (println "REQUIRING: " ~arg)
+      `(do ;;(println "REQUIRING: " ~arg)
            (clojure.core/require ~arg)))))
   `(do
-     (println "REQUIRing: " [~@args])
+     ;; (println "REQUIRing: " [~@args])
      (let [reqs# (for [arg# [~@args]]
-                  (do (println "GET-REQ: " arg#)
+                  (do ;;(println "GET-REQ: " arg#)
                       (let [r# (require-resource arg#)]
                         (doall r#)
                         r#)))]
@@ -1905,38 +1906,38 @@
   ;; (println "import-resource :css: " typ spec)
   (let [nsp (first spec)
         import-ns (find-ns nsp)
-        _ (println "import ns: " import-ns)
-        _ (println "import ns meta: " (meta import-ns))
+        ;; _ (println "import ns: " import-ns)
+        ;; _ (println "import ns meta: " (meta import-ns))
         resource-type (:resource-type (meta import-ns))
         styles (rest spec)
-        _ (println "styles : " styles)
+        ;; _ (println "styles : " styles)
         result
         (for [style styles]
-          (do (println "style name: " style)
+          (do ;;(println "style name: " style)
               (let [style-sym (symbol (str (ns-name import-ns)) (str style))
-                    _ (println "style-sym: " style-sym)
+                    ;; _ (println "style-sym: " style-sym)
                     style-ref (if-let [sref (find-var style-sym)]
                                 (deref sref)
                                 (throw (Exception. (str "CSS resource '" style-sym "' not found; referenced by 'import' spec: " spec))))
-                    _ (println "style ref: " style-ref)
+                    ;; _ (println "style ref: " style-ref)
                     uri (:uri style-ref)
-                    _ (println "uri: " uri)
+                    ;; _ (println "uri: " uri)
 
-                    iores (if-let [res (io/resource uri)]
-                            res (throw (Exception. (str "CSS resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))
+                    ;; iores (if-let [res (io/resource uri)]
+                    ;;         res (throw (Exception. (str "CSS resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))
                     ;; _ (println "IO RES: " iores)
                     style-var (resolve style-sym)]
                 (if (nil? style-var)
                   (throw (Exception. (str "Style '" style "' not found in namespace '" nsp "'")))
-                  (do (println "style var: " style-var)
+                  (do ;;(println "style var: " style-var)
                       (let [style-ref (deref (find-var style-sym))
-                            _ (println "style ref: " style-ref)
+                            ;; _ (println "style ref: " style-ref)
                             uri (:uri style-ref)]
-                        (element :style {:rel "stylesheet"
+                        (element :link {:rel "stylesheet"
                                          :href uri})))))))]
   result))
 
-(defn validate-js-resource
+(defn verify-js-resource
   [uri spec]
   (if (.startsWith uri "http")
     true
@@ -1967,7 +1968,7 @@
                                  ;; _ (println "script ref: " script-ref)
                                  uri (:uri script-ref)
                                  ;; _ (println "uri: " uri)
-                                 iores (validate-js-resource uri spec)
+                                 ;; iores (verify-js-resource uri spec)
                                  ;; _ (println "IO RES: " iores)
                                  ]
                              (element :script {:type "text/javascript"
@@ -1991,8 +1992,8 @@
         uri (deref (find-var style-sym))
         _ (println "uri: " uri)
 
-        iores (if-let [res (io/resource uri)]
-                res (throw (Exception. (str "Polymer style module resource '" uri "' not found in classpath; referenced by var 'uri' in ns '" nsp "' specified by import arg " spec " => " ))))
+        ;; iores (if-let [res (io/resource uri)]
+        ;;         res (throw (Exception. (str "Polymer style module resource '" uri "' not found in classpath; referenced by var 'uri' in ns '" nsp "' specified by import arg " spec " => " ))))
 
         result
         (concat
@@ -2046,4 +2047,7 @@
 
 (defn meta-map
   [m]
+  ;; (println "meta-map: " m)
   (get-metas m))
+
+;;(println "loaded miraj.markup")
