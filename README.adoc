@@ -19,6 +19,7 @@ link:https://www.polymer-project.org/1.0/[Polymer 1.x].
 ** <<empties,empty elements>>
 ** <<attvals,attribute values>>
 ** <<annots,polymer binding annotations>>
+** <<idclass,id and class sugar>>
 * <<validation,validation>>
 * <<xforms,transformations>>
 * <<co-comp,co-compilation>>
@@ -424,6 +425,46 @@ one-way binding and a keyword for two-way binding:
 (element :span :baz)
 ; serialization: <span>{{baz}}</span>
 ----
+
+Some syntax that is allowed by Polymer won't work with miraj since we
+use XSL processing.  In particular, Polymer understands '::' in
+binding annotations, and it understands '$=' in attribute
+declarations (e.g. `foo$={{bar}}`.  Neither of these will work in
+miraj, but that's ok, since both are ghastly hacks and with Clojure we
+can do something that is (I hope) more sensible:
+
+* For `foo="{{bar::evt}}"`, we write `{:foo :evt->bar}`.  This better
+  reflects the semantics, which are essentially "when foo event evt
+  occurs, write foo to bar."
+
+* Instead of `foo$={{bar}}`, meaning "two-way bind to attribute rather
+  than property", we write `{:_foo :bar}`.  This to is intended to
+  better capture the meaning, which is not some kind of special
+  assignment (as implied by '$='), but normal assignment to a
+  different variable (same name, different object?). (This may change,
+  if I can find a syntax that more naturally reflects the meaning.)
+
+=== [[idclass]] id and class sugar
+
+Since `id` and `class` attributes are so common the following
+convenience syntax is supported:
+
+[source,clojure]
+----
+(span ::foo) ;;=> <span id="foo"></span>
+(span ::foo.bar) ;;=> <span id="foo" class="bar"></span>
+(span ::foo.bar.baz) ;;=> <span id="foo" class="bar baz"></span>
+(span ::.foo) ;;=> <span class="foo"></span>
+(span ::.foo.bar) ;;=> <span class="foo bar"></span>
+----
+
+This syntax can be used with other attributes, as long as it comes first:
+
+[source,clojure]
+----
+(body ::foo.bar {:unresolved nil}...) ;;=> <body id="foo" class="bar" unresolved>...</body>
+----
+
 
 === [[validation]] validation
 
