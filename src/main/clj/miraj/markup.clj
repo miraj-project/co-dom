@@ -112,16 +112,28 @@
   ;; (if (re-matches #".*[A-Z].*" (str nm))
   ;;   (throw (Exception. (str "HTML attribute names are case-insensitive; currently, only lower-case is allowed.  (This restriction will be relaxed in a later version.)  Please use clojure-case (lower-case with dashes) for {" (keyword nm) " " val "}."))))
   #_(str/replace nm #"-" "")
+;;  (if (.endsWith nm "$")
   (str nm))
+
+(defn get-two-way-token
+  [v]
+  (let [s (subs (str v) 1)
+        parts (str/split s #"->")]
+    (cond
+      (> (count parts) 2) (throw (Exception. (str "too many -> parts in expr " v)))
+      (= (count parts) 2) (str (last parts) "::" (first parts))
+      :else s)))
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    ;; (println "ATTR: " k " = " v " " (type v))
+    ;;(println "ATTR: " k " = " v " " (type v) (keyword? v))
     (let [[attr-ns nm] (qualified-name k)
           attr-name (if (= :html @mode)
                       (validate-html5-attr-name nm v)
                       (str nm))
-          attr-val (if (= :html @mode)
+
+          ;; FIXME: only do polymer annotations in HTML mode
+          attr-val ;;(if (= :html @mode)
                      (cond
                        (= :rel k) (if (contains? html5-link-types
                                                  (if (string? v) (keyword v) v))
@@ -131,16 +143,19 @@
                                                  k " " v "}; valid values are: "
                                                  html5-link-types))))
                        (keyword? v)
-                       (if (nil? (namespace v))
-                         (str "{{" (subs (str v) 1) "}}")
-                         (str "{{" (subs (str v) 1) "}}"))
+                       (do ;;(println "KEYWORD")
+                         (if (nil? (namespace v))
+                           (str "{{" (get-two-way-token v) "}}")
+                           ;;FIXME
+                           (str "{{" (subs (str v) 1) "}}")))
 
                        (symbol? v) (str "[[" (str v) "]]")
                        ;; (= (subs (str k) 1) (str v)) miraj-boolean-tag
                        ;; (empty? v) miraj-boolean-tag
                        (nil? v) miraj-boolean-tag
                        :else (str v))
-                     (str v))]
+                     ;;(str v))
+                     ]
       (if attr-ns
         (.writeAttribute writer attr-ns attr-name attr-val)
         (.writeAttribute writer attr-name attr-val)))))
@@ -206,7 +221,7 @@
    "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elts) "\">"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
-       "VOID"
+       "VOID_333109"
      "</xsl:copy>"
    "</xsl:template>"
 
@@ -438,6 +453,7 @@
                (do (println (type elts))
                    (throw (Exception. "xsl-xform only works on clojure.data.xml.Element"))))
              (serialize :xml elts))
+        ;; _ (println "XF SOURCE: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
         factory (TransformerFactory/newInstance)
@@ -496,12 +512,13 @@
 
     (.transform transformer xmlSource xmlOutput)
     (println (if (= :html fmt)
-               ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID<[^>]+>" "")
+               ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID_333109<[^>]+>" "")
                (let [string-writer (.getWriter xmlOutput)
                      s (.toString string-writer)
                      void (.flush string-writer)
-                     s (str/replace s #"VOID<[^>]+>" "")
+                     s (str/replace s #"VOID_333109<[^>]+>" "")
                      s (str/replace s #"_EMPTY_333109" "")
+                     s (str/replace s #"_([^=]*)=" "$1\\$=")
                      s (str/replace s #"<!\[CDATA\[" "")
                      s (str/replace s #"]]>" "")
                      regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
@@ -570,7 +587,7 @@
                         s (.toString string-writer)
                         ;; _ (prn "XML OUTPUT: " s)
                         void (.flush string-writer)
-                        s (str/replace s #"VOID<[^>]+>" "")
+                        s (str/replace s #"VOID_333109<[^>]+>" "")
                         s (str/replace s #"_EMPTY_333109" "")
                         s (str/replace s #"<!\[CDATA\[" "")
                         s (str/replace s #"]]>" "")
@@ -623,7 +640,7 @@
                     (throw (Exception. "invalid mode: " @mode)))]
       doc-str)))
     ;; (str (if (= @mode :html)
-    ;;        (let [s (str/replace (.toString string-writer) #"VOID<[^>]+>" "")
+    ;;        (let [s (str/replace (.toString string-writer) #"VOID_333109<[^>]+>" "")
     ;;              regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
     ;;              (str/replace s regx ""))
     ;;        (.toString string-writer)))))
@@ -650,7 +667,7 @@
     (.write writer (str
                     (if (= @mode :html)
                       (if (contains? html5-void-elts t)
-                        "VOID"))
+                        "VOID_333109"))
                     "</" t ">"))))
 
 (defn str-empty? [s]
@@ -718,6 +735,11 @@
   (next-events [_ next-items]
     next-items)
 
+  clojure.lang.PersistentArrayMap
+  (gen-event [coll]
+    (println "GEN-EVENT PAM: " coll))
+  (next-events [coll next-items])
+
   clojure.lang.Sequential
   (gen-event [coll]
     (gen-event (first coll)))
@@ -737,7 +759,7 @@
     (let [nm (name kw)
           ns (namespace kw)]
       (Event. :kw nil nil
-                (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]"))))
+                (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}"))))
               ;; FIXME this should not be necessary if the tag fns are correct:
               ;; (if (nil? (namespace kw))
               ;;   (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
@@ -751,7 +773,7 @@
           ns (namespace sym)]
       ;; (log/trace "gen-event Symbol: " sym)
       (Event. :sym nil nil
-              (str "{{" ns (if ns ".") nm "}}"))))
+              (str "[[" ns (if ns ".") nm "]]"))))
       ;;         (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
   (next-events [_ next-items]
     next-items)
@@ -835,18 +857,24 @@
             (let [tokstr (name attrs)
                   no-id (.startsWith tokstr ".")
                   toks (filter identity (str/split tokstr #"\."))
-                  attrs (first toks)]
-              (doall toks)
-              ;; (println "TOKS: " toks attrs)
-              ;; (println "REST TOKS: " (rest toks))
-              (if no-id
-                [{:class (str/trim (str/join " " toks))} content]
-                (if (seq (rest toks))
-                  [{:id attrs :class (str/trim (str/join " " (rest toks)))} content]
-                  [{:id attrs} content])))))
+                  attrs (first toks)
+                  ;; (doall toks)
+                  ;; (println "TOKS: " toks attrs)
+                  ;; (println "REST TOKS: " (rest toks))
+                  result (if no-id
+                           [{:class (str/trim (str/join " " toks))} content]
+                           (if (seq (rest toks))
+                             [{:id attrs :class (str/trim (str/join " " (rest toks)))} content]
+                             [{:id attrs} content]))]
+              ;; (println "CONTENT: " (last result))
+              (if (map? (first (last result)))
+                (if (instance? miraj.markup.Element (first (last result)))
+                  result
+                  [(merge (first result) (first (last result))) (rest (last result))])
+                result))))
 
       (map? attrs)
-      (do ;;(println "map? attrs")
+      (do ;;(println "map? attrs" attrs)
         (if (instance? miraj.markup.Element attrs)
           (do ;;(println "Element instance")
             [{} (remove empty? (list attrs content))])
@@ -1218,44 +1246,6 @@
                           func#))))))
           f (eval func)])))
 
-;; (defn make-meta-tag-fn-x
-;;   [tag+validator]
-;;   ;; (log/trace "make-tag-fn " tag+validator)
-;;     (let [fn-tag (symbol (subs (str (first tag+validator)) 1))
-;;           fn-validator (fnext tag+validator)
-;;           elt (keyword fn-tag)
-;;           ;; log (println "make-meta-tag-fn fn-tag: " fn-tag)
-;;           ;; log (println "make-meta-tag-fn elt-kw: " elt)
-;;           func `(defn ~fn-tag ;; (symbol (str tag))
-;;                   [& fn-args#]
-;;                   ;; (println "POLYMER FN: " ~elt (pr-str fn-args#))
-;;                   (if (empty? fn-args#)
-;;                     (element ~elt)
-;;                     (let [first# (first fn-args#)
-;;                           attrs# (if (map? first#)
-;;                                    (do ;(log/trace "map? first")
-;;                                        (if (instance? miraj.markup.Element first#)
-;;                                          (do ;(log/trace "Element instance")
-;;                                              {})
-;;                                          (do ;(log/trace "NOT Element instance")
-;;                                              first#)))
-;;                                    (do ;(log/trace "NOT map? first")
-;;                                        {}))
-;;                           content# (if (map? first#)
-;;                                      (if (instance? miraj.markup.Element first#)
-;;                                        fn-args#
-;;                                        (rest fn-args#))
-;;                                      fn-args#)
-;;                           func# (apply element ~elt attrs# content#)]
-;;                       ;; (log/trace "fn-args: " fn-args#)
-;;                       ;; (log/trace "elt: " ~elt)
-;;                       ;; (log/trace "tags: " attrs#)
-;;                       ;; (log/trace "content: " content# " (" (type content#) ")")
-;;                       ;; (log/trace "func: " func# (type func#))
-;;                       func#)))]
-;;       ;;(println (macroexpand func))))
-;;       (eval func)))
-
 (defn make-meta-tag-fns
   [rules]
   ;; (log/trace "make-meta-tag-fns " rules) ;; (type rules))
@@ -1288,8 +1278,6 @@
                                ;; _# (println "ATTRIBS: " attribs# (type attribs#))
                                func# (apply element "meta" (list attribs#))]
                            func#))))))))))
-            ;; #_(println (macroexpand func))
-            ;; (eval func))))))
 
 (defn make-tag-fns
   [pfx tags sfx]
@@ -1334,7 +1322,7 @@
                             func#))))
               f (eval func)]))))
 
-;;FIXME rename this to make-component-fns
+;;FIXME rename this to def-components
 (defn make-resource-fns
   [typ tags]
   (do ;;(println "make-resource-fns: " typ tags)
@@ -1352,21 +1340,24 @@
                                         :elt-kw ~elt-kw
                                         :elt-uri ~elt-uri}})
 
-                                    (let [attrib-args# (first args#)
-                                          attrs# (if (map? attrib-args#)
-                                                   (do ;(log/trace "map? first")
-                                                     (if (instance? miraj.markup.Element attrib-args#)
-                                                       (do ;(log/trace "Element instance")
-                                                         {})
-                                                       (do ;(log/trace "NOT Element instance")
-                                                         attrib-args#)))
-                                                   (do ;(log/trace "NOT map? attrib-args#")
-                                                     {}))
-                                          content# (if (map? attrib-args#)
-                                                     (if (instance? miraj.markup.Element attrib-args#)
-                                                       args#
-                                                       (rest args#))
-                                                     args#)]
+                                    ;; (let [attrib-args# (first args#)
+                                    ;;       attrs# (if (map? attrib-args#)
+                                    ;;                (do ;(log/trace "map? first")
+                                    ;;                  (if (instance? miraj.markup.Element attrib-args#)
+                                    ;;                    (do ;(log/trace "Element instance")
+                                    ;;                      {})
+                                    ;;                    (do ;(log/trace "NOT Element instance")
+                                    ;;                      attrib-args#)))
+                                    ;;                (do ;(log/trace "NOT map? attrib-args#")
+                                    ;;                  {}))
+                                    ;;       content# (if (map? attrib-args#)
+                                    ;;                  (if (instance? miraj.markup.Element attrib-args#)
+                                    ;;                    args#
+                                    ;;                    (rest args#))
+                                    ;;                  args#)]
+                                    (let [first# (first args#)
+                                          rest# (rest args#)
+                                          [attrs# content#] (parse-elt-args first# rest#)]
                                       (with-meta (apply element ~elt-kw attrs# content#)
                                         {:miraj {:co-fn true
                                                  :co-type ~typ
@@ -1383,7 +1374,39 @@
                                      :elt-kw elt-kw
                                      :elt-uri elt-uri}})
               #_(println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
-;              )))))
+
+(defmacro co-fn
+  [fn-tag docstring elt-kw elt-uri typ]
+  (do #_(println "co-fn:" typ fn-tag elt-kw elt-uri docstring)
+              (eval `(defn ~fn-tag ~docstring
+                       [& args#]
+;;                       (println "invoking " ~fn-tag)
+                       (let [elt# (if (empty? args#)
+                                    (with-meta (element ~elt-kw)
+                                      {:miraj
+                                       {:co-fn true
+                                        :co-type ~typ
+                                        :doc ~docstring
+                                        :elt-kw ~elt-kw
+                                        :elt-uri ~elt-uri}})
+                                    (let [first# (first args#)
+                                          rest# (rest args#)
+                                          [attrs# content#] (parse-elt-args first# rest#)]
+                                      (with-meta (apply element ~elt-kw attrs# content#)
+                                        {:miraj {:co-fn true
+                                                 :co-type ~typ
+                                                 :doc ~docstring
+                                                 :elt-kw ~elt-kw
+                                                 :elt-uri ~elt-uri}})))]
+                         elt#)))
+              (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
+                            (fn [old new]
+                              (merge old new))
+                            {:miraj {:co-fn true
+                                     :co-type typ
+                                     :doc docstring
+                                     :elt-kw elt-kw
+                                     :elt-uri elt-uri}})))
 
 (defn optimize-js
   [doc]
@@ -1482,19 +1505,21 @@
 (defmethod get-resource-elt :default
   [typ nsp sym spec]
   ;; (println (str "get-resource-elt :default: " typ " " nsp " " sym))
-  (element :link
-           {:rel "import" :href (get-href (ns-name nsp) ref)}))
-  ;; (element :link {:rel "import" :href uri}))
+  (throw (Exception. (str "Unrecognized resource type for require: " spec))))
+  ;; (element :link
+  ;;          {:rel "import" :href (get-href (ns-name nsp) ref)}))
+
 
 (defmethod get-resource-elt :polymer
   [typ nsp sym spec]
-  ;; (println (str "get-resource-elt :polymer: " typ " " nsp " " sym (meta sym)))
+  (println)
+  (println (str "get-resource-elt polymer: " typ " " nsp " " sym (meta sym)))
   (let [pfx (:resource-pfx (meta nsp))
         path (:elt-uri (:miraj (meta (find-var sym))))
         uri (str pfx "/" path)]
-    ;; (print "meta: " (meta (find-var sym)))
-    ;; (print "miraj: " (keys (meta (find-var sym))))
-    ;; (print "uri: " uri)
+    (print "meta: " (meta (find-var sym)))
+    (print "miraj: " (keys (meta (find-var sym))))
+    (print "uri: " uri)
     ;; (let [iores (if-let [res (io/resource uri)]
     ;;               res (throw (Exception.
     ;;                           (str/join "\n"
@@ -1672,12 +1697,20 @@
              ;; etc.
              }})
 
+(def html5-link-meta
+  ;; link elements treated as meta-data
+ {:icon ^:compound {:uri :uri :sizes :sizes}
+  :manifest :uri})
+
 (def html5-miraj-meta-attribs
   {:platform (merge apple-meta-tags ms-meta-tags mobile-meta-tags)})
 
 (def html5-meta-attribs
   (merge {} html5-global-attrs
-         html5-meta-attribs-standard html5-meta-attribs-extended html5-miraj-meta-attribs))
+         html5-meta-attribs-standard
+         html5-meta-attribs-extended
+         html5-miraj-meta-attribs
+         html5-link-meta))
          ;; apple-meta-tags ms-meta-tags))
 
 (defn do-viewport
@@ -1685,7 +1718,7 @@
       ;; :viewport {:width :device
       ;;        :scale {:initial "1.0" :min "1.0"}
       ;;        :user-scalable true}
-  (println "do-viewport: " tag " | " key "|" val "|" ruleset)
+  ;; (println "do-viewport: " tag " | " key "|" val "|" ruleset)
   (let [w (:width val)
         width (str "width=" (if (= :device w) "device-width" w))
         initial-scale (str "initial-scale=" (get-in val [:scale :initial]))
@@ -1977,20 +2010,53 @@
     ;; (println "RESULT: " result)
     result))
 
-(defmethod import-resource :polymer-style-module
-  [type spec]
-  (println "import-resource :polymer-style-module: " spec)
+(defmethod import-resource :html-import
+  [typ spec]
+  (println "import-resource :html-import: " typ spec)
   (let [nsp (first spec)
         import-ns (find-ns nsp)
-        _ (println "import ns: " import-ns)
-        _ (println "import ns meta: " (meta import-ns))
+        ;; _ (println "import ns: " import-ns)
+        ;; _ (println "import ns meta: " (meta import-ns))
+        _ (clojure.core/require nsp)
+        resource-type (:resource-type (meta import-ns))
+        themes (rest spec)
+        ;; _ (println "themes : " themes)
+        result (into '()
+                     (for [theme (reverse themes)]
+                       (do ;;(println "theme name: " theme)
+                           (let [theme-sym (symbol
+                                             (str (ns-name import-ns)) (str theme))
+                                 ;; _ (println "theme-sym: " theme-sym)
+                                 ;; theme-ref (deref (find-var theme-sym))
+                                 theme-ref (if-let [sref (find-var theme-sym)]
+                                             (deref sref)
+                                             (throw (Exception. (str "Theme resource '" theme-sym "' not found; referenced by 'import' spec: " spec "; configured by " import-ns))))
+                                 ;; _ (println "theme ref: " theme-ref)
+                                 uri (:uri theme-ref)
+                                 ;; _ (println "uri: " uri)
+                                 ;; iores (verify-js-resource uri spec)
+                                 ;; _ (println "IO RES: " iores)
+                                 ]
+                             (element :link {:rel "import"
+                                             :href uri})))))]
+    ;; (doall result)
+    ;; (println "RESULT: " result)
+    result))
+
+(defmethod import-resource :polymer-style-module
+  [type spec]
+  ;; (println "import-resource :polymer-style-module: " spec)
+  (let [nsp (first spec)
+        import-ns (find-ns nsp)
+        ;; _ (println "import ns: " import-ns)
+        ;; _ (println "import ns meta: " (meta import-ns))
         resource-type (:resource-type (meta import-ns))
         styles (rest spec)
-        _ (println "styles : " styles)
+        ;; _ (println "styles : " styles)
         style-sym (symbol (str (ns-name import-ns)) "uri")
-        _ (println "style sym: " style-sym)
+        ;; _ (println "style sym: " style-sym)
         uri (deref (find-var style-sym))
-        _ (println "uri: " uri)
+        ;; _ (println "uri: " uri)
 
         ;; iores (if-let [res (io/resource uri)]
         ;;         res (throw (Exception. (str "Polymer style module resource '" uri "' not found in classpath; referenced by var 'uri' in ns '" nsp "' specified by import arg " spec " => " ))))
@@ -2003,11 +2069,12 @@
            (do #_(println "style name: " style)
                (let [style-sym (symbol
                                 (str (ns-name import-ns)) (str style))
-                     _ (println "style-sym: " style-sym)
+                     ;; _ (println "style-sym: " style-sym)
                      style-ref (deref (find-var style-sym))]
+                 ;;TODO verify ref'ed custom style is actually in the style module resource
                  ;; (println "style ref: " style-ref)
                  (element :style {:is "custom-style"
-                                  :include style})))))]
+                                  :include style-ref})))))]
     result))
 
 (defn get-import
@@ -2018,7 +2085,7 @@
     (clojure.core/require nsp)
     (let [import-ns (find-ns nsp)
           resource-type (:resource-type (meta import-ns))]
-    ;; (println "import ns: " nsp (meta nsp))
+    ;; (println "import ns: " nsp (meta import-ns))
     ;; (println "import resource type: " resource-type)
     (import-resource resource-type import))))
 
