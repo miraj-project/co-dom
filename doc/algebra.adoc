@@ -1,0 +1,191 @@
+the (co-)algebra of functions and co-functions
+==============================================
+
+call a function, observe a co-function
+
+functions yield values; co-functions exhibit behaviors
+
+Definition involves two things: a signature, which declares the fn,
+and a structure, which defines the declared function.
+
+The key is to treat both signatures and structures as first-class
+objects.  Then "calling a function" involves two bits of mechanism:
+you call the signature, which in turn "calls" the structure
+(implementation).
+
+Note that conceptually Clojure already does something just like this.
+The `:require` clauses of an `ns` declaration tell Clojure which
+resources - signatures and structures, declarations and definitions -
+the programmer expects to use.  It loads the resources ahead-of-time
+(aot loading), but it could do otherwise.  For example, it could wait
+until a function is actually used and only then find the signature and
+structure.  In principal it could also split definitions into explicit
+and distinct declarations and definitions (some strongly typed
+languages do this), and find and load them separately.
+
+With web components, Polymer-style, this sort of duality is present
+ but obscured by the details of the programming languages.  Polymer
+ component programming is done in HTML and Javascript.  The programmer
+ defines a component using Javascript; this makes its signature
+ available for use as an HTML tag, but does not specify its ("shadow"
+ DOM) structure.  For that, the programmer writes HTML code using a
+ `<template>` element in a `<dom-module>` element.  Common practice is
+ to include the defining Javascript code within the `<dom-module>`
+ element, but this is optional - the only requirement is that the `id`
+ attribute of the `<dom-module>` match the `is` attribute of the
+ defining Javascript.  The end result is that the programmer "calls"
+ the function (uses the tag) in a webpage, but in order for the call
+ to succeed, the associated co-function must be "observed" - the
+ programmer must include a `<link>` element that will download the
+ (HTML) definition.
+
+With web components in miraj, this duality is made explicit.
+Programming a web component involves two mechanisms:
+
+* the function call mechanism. when you _call_ a web component in
+  Clojure, the mechanism locates and loads the _signature_ associated
+  with the component, evaluates it, and returns the result - which in
+  this case will be a Clojure datum that serializes to an HTML
+  expression.  (The resulting HTML will be sent to the client
+  browswer, but that is an irrelevant implementation detail.)
+
+* the co-function observation mechanism.  when you _observe_ a web
+  component in a webpage (using <link>), the mechanism locates and
+  loads the structure (implementation) associated with the component,
+  evaluates it, and "exhibits" the result, which in this case will be
+  the HTML expression that defines the component.  This mechanism
+  involves HTTP - observation and exhibition correspond to HTTP
+  request and response - but that is a contingent implementation
+  detail that can be ignored.
+
+The essential point is that we have two ways of "activating" the component.
+
+So to define a web component we need to do two things:
+
+* define a function that, when called, returns a value that serializes
+  to the HTML code that represents an invocation of the component
+  function - e.g.
+
+[source,clojure]
+----
+(foo.bar/my-component...)  ;; defined in foo/bar.clj
+=>
+<my-component>...</my-component>
+----
+
+* define a complementary _co_-function that, when _observed_, returns the HTML
+  code that implements the component.
+
+[source,clojure]
+----
+(miraj.markup/require '(foo.bar :refer [my-component])) ;; dual to clojure.core/require
+;; translates to:
+<link rel="import" href="foo/bar/my-component.html">
+;; which generates an HTTP GET, which the server maps to (observe foo.bar/my-component),
+;; which yields:
+
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<dom-module id="my-component">
+  <template>
+  ...
+  </template>
+  <script>
+    Polymer({ is: 'my-component', ...})
+  </script>
+</dom-module>
+----
+
+Note that `observe` is dual to `apply`; observing a co-function is
+dual to applying (calling) a function.
+
+== implementation strategies
+
+Strategy 0: free-form.  Ideally we would have a language that allows
+us to use the same names for fn and co-fn, and `apply` and `observe`
+would do the right thing automatically.  Since we only have functions
+and application, we can use whatever function names we please, so long
+as we organize things correctly - if `foo` is the function and `bar`
+is the implementation, we need to make sure we include `<link
+href="bar">` if we want to use `<foo>` in our webpage.
+
+
+Strategy 1: naming conventions.  Use `co-` prefixed to the function
+  name to declare the implementation.  Use `defn` to define
+  `my-component` and `co-my-component`.  Then generate `<link>`
+  elements that refer to the latter.
+
+Polymer uses something like this strategy.  Components are defined in
+files that use the same name as the component; e.g., `my-list` is
+defined in `my-list.html`.  But this is just convention; it is not a
+requirement.
+
+Strategy 2: use macros to extend the language.  For example, a
+`def-cofn` macro will generate a function that contains the co-fn
+structure as meta-data.  Then calling the function yields the HTML
+tag, and observing it (using an `observe` macro) will yield the
+implementation code.
+
+For miraj, the strategy is: define the low-level functions/macros
+needed to express signature/structure pairs explicitly, then provide a
+set higher-level convenience macros that unify things, so we can use
+apply/observe on one object instead of defining distinct fn/co-fn
+(sig/struct) pairs.
+
+NB: such web components are thus pairings of a fn and a co-fn, or of a
+signature and a structure.
+
+TODO: what's the relation between fn/co-fn on the one hand and
+sig/struct on the other?  Is it just two perspectives - one
+functional, the other algebraic - on one thing?  What about the
+functional/interactional contrast?
+
+NOTE.  The HTML functions in miraj.html are ordinary Clojure
+functions, but they evaluate to function _calls_ in HTML, e.g.
+
+[source,clojure]
+----
+(miraj.html/span "foo") ;=>  <span>foo</span>
+----
+
+In other words, they evaluate to something that is essentially
+external to Clojure itself.  So there is a kind of fn/co-fn duality
+here too.
+
+Can we observe e.g. `span`?  In principal, we must - but the web
+browser already includes the definitions for the standard tagset, just
+as Clojure always includes `clojure.core`, so we do not need to
+explicitly observe them using a `<link>` element.
+
+So even function calls in Clojure involve both application and
+observation in this sense.  When you call a function, the runtime must
+find and load its definition, which is basically what observation is
+about.  The difference is that such definitions are not behaviors.
+You can only observe behaviors, and observation is by definition
+interactional, so it is never truly functional.
+
+=== impl
+
+The naive implementation leaves everything to the programmer.
+
+Key points:
+
+* miraj.markup/require is dual to clojure.core/require, and to HTML <head>
+
+** load resources in Clojure
+
+** generate HTML <link> elements
+
+* for miraj.markup/require to work, required resources must have the right meta-data
+
+** namespace must be marked with :resource-type (e.g. :polymer) and :resource-pfx
+
+** (co-)functions must be marked with :elt-uri, :elt-kw, etc.
+
+* handling for the `<link>` resources must be specified, either by
+  routes in the webapp, or the resources must be co-compiled to disk.
+
+Any way you cut it there is a lot of crap that must be coordinated -
+way more housekeeping than anybody wants.  One of the main goals of
+miraj is to automate as much as possible, to cut developer overhead to
+a bare minimum.
+
