@@ -11,6 +11,7 @@
   miraj.markup
   (:refer-clojure :exclude [import require])
   (:require [clojure.string :as str]
+            [clojure.pprint :as pp]
             [clojure.java.io :as io])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
@@ -518,7 +519,7 @@
                      void (.flush string-writer)
                      s (str/replace s #"VOID_333109<[^>]+>" "")
                      s (str/replace s #"_EMPTY_333109" "")
-                     s (str/replace s #"_([^=]*)=" "$1\\$=")
+                     s (str/replace s #"^_([^=]*)=" "$1\\$=")
                      s (str/replace s #"<!\[CDATA\[" "")
                      s (str/replace s #"]]>" "")
                      regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
@@ -1322,7 +1323,29 @@
                             func#))))
               f (eval func)]))))
 
-;;FIXME rename this to def-components
+(defn def-cotype
+  [ns-sym var-sym uri & docstring]
+  (println "def-cotype:" ns-sym var-sym docstring)
+  (let [ds (if (empty? docstring) "" (first docstring))]
+    (intern ns-sym (with-meta (symbol (str var-sym)) {:doc ds :uri uri})
+            (fn [& args]
+              (let [elt (if (empty? args)
+                           (element (keyword var-sym))
+                           (let [first (first args)
+                                 rest (rest args)
+                                 [attrs content] (parse-elt-args first rest)]
+                             (apply element (keyword var-sym) attrs content)))]
+                elt)))))
+
+  ;; (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
+  ;;              (fn [old new]
+  ;;                (merge old new))
+  ;;              {:miraj {:co-fn true
+  ;;                       :co-type typ
+  ;;                       :doc docstring
+  ;;                       :elt-kw elt-kw
+  ;;                       :elt-uri elt-uri}}))
+
 (defn make-resource-fns
   [typ tags]
   (do ;;(println "make-resource-fns: " typ tags)
@@ -1453,7 +1476,7 @@
 
 (defn get-href
   ([pfx sfx]
-   ;;(log/trace "get-href: " pfx " - " sfx (type sfx))
+   (println "get-href: " pfx " - " sfx (type sfx))
    (let [pfx (str/split (str pfx) #"\.")
          hd (first pfx)]
      ;; (log/trace "get-href pxf: " pfx)
@@ -1509,17 +1532,17 @@
   ;; (element :link
   ;;          {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
-
 (defmethod get-resource-elt :polymer
   [typ nsp sym spec]
-  (println)
-  (println (str "get-resource-elt polymer: " typ " " nsp " " sym (meta sym)))
+  (println "GET-RESOURCE-ELT polymer: NS: " nsp " SYM: " sym)
+  (println "spec: " spec)
   (let [pfx (:resource-pfx (meta nsp))
         path (:elt-uri (:miraj (meta (find-var sym))))
         uri (str pfx "/" path)]
-    (print "meta: " (meta (find-var sym)))
-    (print "miraj: " (keys (meta (find-var sym))))
-    (print "uri: " uri)
+    (println "META on sym:")
+    (pp/pprint (meta (find-var sym)))
+    (println "META KEYS: " (keys (meta (find-var sym))))
+    (println "URI: " uri)
     ;; (let [iores (if-let [res (io/resource uri)]
     ;;               res (throw (Exception.
     ;;                           (str/join "\n"
@@ -1539,43 +1562,118 @@
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
-(defmethod get-resource-elt :css
-;; FIXME: support all attribs
-  [typ nsp sym spec]
-  ;; (println "get-resource-elt :css: " (str typ " " nsp " " sym))
-  (let [uri (deref (find-var sym))]
-  (element :link {:rel "stylesheet" :href (:uri uri)
-                  :media (if (:media uri) (:media uri) "all")})))
+;; FIXME:  css and js should be imported, not required
+;; (defmethod get-resource-elt :css
+;; ;; FIXME: support all attribs
+;;   [typ nsp sym spec]
+;;   ;; (println "get-resource-elt :css: " (str typ " " nsp " " sym))
+;;   (let [uri (deref (find-var sym))]
+;;   (element :link {:rel "stylesheet" :href (:uri uri)
+;;                   :media (if (:media uri) (:media uri) "all")})))
 
-(defmethod get-resource-elt :js
-;;FIXME support all attribs
-  [typ nsp sym spec]
-  ;; (println "get-resource-elt :js: " (str typ " " nsp " " sym))
-  (element :script {:src (deref (find-var sym))}))
+;; (defmethod get-resource-elt :js
+;; ;;FIXME support all attribs
+;;   [typ nsp sym spec]
+;;   ;; (println "get-resource-elt :js: " (str typ " " nsp " " sym))
+;;   (element :script {:src (deref (find-var sym))}))
 
 (defn require-resource
   [comp]
-  ;; (println (str "require-resource: " comp))
-  (let [nsp (find-ns (first comp))
-        ;; _ (println "nsp: " nsp)
+  (println (str "REQUIRE-RESOURCE: " comp))
+  ;; at this point, the ns has been required, but not the fns
+  ;; tasks:  1. create the fns based on :refer; 2. generate the <link> elts
+  (let [ns-sym (first comp)
+        _ (println "ns sym: " ns-sym)
+        ns-obj (find-ns ns-sym)
+        _ (println "ns obj: " ns-obj)
+        _ (println "ns obj map?: " (map? ns-obj))
+        _ (println "ns meta: " (meta ns-obj))
+        pfx-sym (symbol (str ns-sym) "pfx")
+        _ (println "ns pfx-sym: " pfx-sym)
+        pfx (deref (resolve pfx-sym))
+        _ (println "ns pfx val: " (pr-str pfx))
         options (apply hash-map (rest comp))
         as-opt (:as options)
+        _ (println ":as " as-opt)
         refer-opts (:refer options)
-        ;; _ (println "component ns: " nsp (meta nsp))
+        _ (println ":refer " refer-opts)
+        ns-type (:resource-type (meta ns-obj))
+        _ (println "ns-type: " ns-type)
         ]
     (if (nil? refer-opts)
       (element :link
-               {:rel "import" :href (get-href nsp nil)})
-      (for [ref refer-opts]
-        (let [ref-sym (symbol (str (ns-name nsp)) (str ref))
-              ;; _ (println "refsym: " ref-sym)
-              ;; _ (println "refsym meta: " (meta (find-var ref-sym)))
-              ;; _ (println "nsp meta: " (meta nsp))
-              ns-type (:resource-type (meta nsp))
-              ;; _ (println "nsp: " nsp)
-              ;; _ (println "ns-type: " ns-type)
-              ]
-          (get-resource-elt ns-type nsp ref-sym comp))))))
+               {:rel "import" :href (get-href ns-obj nil)})
+
+      ;; if :refer :all, doseq to defn all elt fns, otherwise just do the refs
+
+      (do (println "\nFOR [ref refs]:")
+          (for [ref refer-opts]
+            (let [ref-sym (symbol (str ns-sym) (str ref))
+                  _ (println "\nREF: " ref)
+                  _ (println "refsym: " ref-sym)
+                  _ (println "refsym meta:")
+                  _ (pp/pprint (meta (find-var ref-sym)))
+                  ;; what we want is to treat ns as a map,
+                  ;; e.g. (make-resource-fn (:button polymer.paper))
+                  ;; since a ns is not a map we need to intern a map
+                  ;; by convention use the ns itself as a sym
+                  ns-map-sym (symbol (str ns-sym) (str ns-sym))
+                  _ (println "ns-map-sym: " ns-map-sym)
+                  ns-map (deref (resolve ns-map-sym))
+                  ;; _ (println "ns-map val: " ns-map)
+                  ref-kw (keyword ref)
+                  _ (println "ref kw:" ref-kw)
+                  elt-spec (get ns-map ref-kw)
+                  _ (println "elt-spec: " (pr-str elt-spec))
+                  uri (str pfx "/" (second elt-spec))
+                  _ (println "link href: " uri)
+                  ]
+              ;; step 2
+              (def-cotype ns-sym ref uri)
+              ;; step 3
+              (element :link {:rel "import" :href uri})))))))
+              ;; (get-resource-elt ns-type ns-obj ref-sym comp)))))))
+
+;; (require [[polymer.paper :as paper :refer [button card]]])
+(defmacro require
+  "1. clojure.core/require the ns  2. generate the <link> elts
+  NB: for clojure.core/require to work the :refer items must be def'd in the ns
+  so to support jit loading we need to require first w/o :refer, then define the :refers,
+  then alias as needed"
+  [& args]
+  ;; step 1: clojure.core/require the namespaces, without options
+  (doseq [arg args]
+    (eval
+     (macroexpand
+      `(let [ns-basic# (first ~arg)]
+         (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
+             (clojure.core/require ns-basic#)))))
+  ;; step 2: for each :refer, define and intern the ctor fn in the ns
+  ;; step 3: for each :refer, generate a <link> element
+  ;; require-resource does both
+  `(do
+     ;; (println "REQUIRing: " [~@args])
+     (let [link-elts# (for [arg# [~@args]]
+                        (do (println "GET-REQ: " arg#)
+                            (let [r# (require-resource arg#)]
+                              (doall r#)
+                              r#)))]
+       (doall link-elts#)
+       link-elts#)))
+           ;;   (element :foo))))))
+
+;;             (first r#))))))
+
+;    (element :foo)))
+
+;;  `(clojure.core/require ~@args))
+
+  ;; `(flatten
+  ;;   (for [arg# ~args]
+  ;;     (do
+  ;;       (println REQUIRING: " arg#)
+  ;;       (clojure.core/require arg#)
+  ;;       (flatten (require-resource arg#))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1884,38 +1982,6 @@
         normh (apply xsl-xform xsl-normalize h)
         ]
     normh))
-
-;; (require [[polymer.paper :as paper :refer [button card]]])
-(defmacro require
-  [& args]
-  (doseq [arg args]
-    (eval
-     (macroexpand
-      `(do ;;(println "REQUIRING: " ~arg)
-           (clojure.core/require ~arg)))))
-  `(do
-     ;; (println "REQUIRing: " [~@args])
-     (let [reqs# (for [arg# [~@args]]
-                  (do ;;(println "GET-REQ: " arg#)
-                      (let [r# (require-resource arg#)]
-                        (doall r#)
-                        r#)))]
-       (doall reqs#)
-       reqs#)))
-           ;;   (element :foo))))))
-
-;;             (first r#))))))
-
-;    (element :foo)))
-
-;;  `(clojure.core/require ~@args))
-
-  ;; `(flatten
-  ;;   (for [arg# ~args]
-  ;;     (do
-  ;;       (println REQUIRING: " arg#)
-  ;;       (clojure.core/require arg#)
-  ;;       (flatten (require-resource arg#))))))
 
 ;; <!-- import the shared styles  -->
 ;; <link rel="import" href="../shared-styles/foo.html">
