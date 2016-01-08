@@ -1965,7 +1965,7 @@
         options (apply hash-map (rest spec))
         as-opt (:as options)
         _ (println ":as " as-opt)
-        refer-opts (:refer options)
+        refer-opts (doall (:refer options))
         _ (println ":refer " refer-opts)
         ns-type (:resource-type (meta ns-obj))
         _ (println "ns-type: " ns-type)
@@ -1992,9 +1992,7 @@
                   _ (println "refsym: " ref-sym)
                   _ (println "refsym meta:")
                   _ (pp/pprint (meta (find-var ref-sym)))
-
                   ref-var (find-var ref-sym)]
-
               (if ref-var
                 (do (println "ref-var: " ref-var)
                     (println "ref-var meta: " (meta ref-var))
@@ -2057,10 +2055,10 @@
      (let [link-elts# (flatten (for [arg# [~@args]]
                                  (do ;;(println "GET-REQ: " arg#)
                                      (let [r# (require-resource arg#)]
-                                       ;; (doall r#)
+                                       (doall r#)
                                        r#))))]
-       ;; (doall link-elts#)
-       ;; (println "REQUIREd: " link-elts#)
+       (doall link-elts#)
+       (println "REQUIREd: " link-elts#)
        link-elts#)))
            ;;   (element :foo))))))
 
@@ -2293,11 +2291,12 @@
   ;; (println "meta-map: " m)
   (get-metas m))
 
-(defn co-dom
+(defmacro co-dom
   [nm & args]
-  (println "CO-DOM: " nm args)
-  (let [tree (apply element :ROOT_333109 {:id (str nm)} (flatten args))]
-    (println "COCO-DOM: " tree)
-    (xsl-xform xsl-normalize-co-dom tree)))
+  (println "CO-DOM: " (str nm) " ARGS: " args)
+  `(do (println "CO-dom: " ~(str nm) ~@args)
+       (let [tree# (apply element :ROOT_333109 {:id ~(str nm)} (list ~@args))]
+         (println "COCO-DOM: " tree#)
+         (xsl-xform xsl-normalize-co-dom tree#))))
 
 ;;(println "loaded miraj.markup")
