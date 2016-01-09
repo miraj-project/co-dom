@@ -32,6 +32,8 @@
 (defonce verify? (atom false))
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
 
+(defn ns->uri [n] (str/replace n #"\." "/"))
+
 (def html5-void-elts
   #{"area" "base" "br" "col"
    "embed" "hr" "img" "input"
@@ -215,6 +217,7 @@
 
    "<xsl:template match='html'>"
      "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;</xsl:text>"
+     "<xsl:text>&#x0A;</xsl:text>"
      "<xsl:copy>"
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
@@ -511,7 +514,7 @@
 ;;FIXME: support :xhtml option
 (defn pprint-impl
   [& elts]
-  (println "PPRINT-IMPL: " elts)
+  ;; (println "PPRINT-IMPL: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -526,7 +529,7 @@
         ml (if (string? s)
              (throw (Exception. "xml pprint only works on clojure.data.xml.Element"))
              (if (> (count s) 3)
-               (do (println "pprint-impl FOREST")
+               (do ;;(println "pprint-impl FOREST")
                    (let [s (serialize :xml (element :ROOT_333109 s))]
                      (reset! mode fmt)
                      s))
@@ -576,7 +579,7 @@
 
 (defn pprint
   [& elts]
-  (println "PPRINT elts: " elts)
+  ;; (println "PPRINT elts: " elts)
   (if (keyword? (first elts))
     (do ;;(println "fnext elts: " (fnext elts))
         (if (nil? (fnext elts))
@@ -1373,9 +1376,9 @@
                             func#))))
               f (eval func)]))))
 
-(defn def-cotype
+(defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  (println "DEF-COTYPE:" ns-sym nm-sym docstring)
+  (println "HTML-CONSTRUCTOR:" ns-sym nm-sym docstring)
   (let [ds (if (empty? docstring) "" (first docstring))]
     (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :co-type true})
             (fn [& args]
@@ -1926,7 +1929,7 @@
 
 (defmethod get-resource-elt :link
   [typ nsp sym spec]
-  ;; (println "get-resource-elt :link: " (str typ " " nsp " " sym))
+  (println "GET-RESOURCE-ELT :link: " (str typ " " nsp " " sym))
   (element :link
            {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
@@ -1951,24 +1954,24 @@
   ;; at this point, the ns has been required, but not the fns
   ;; tasks:  1. create the fns based on :refer; 2. generate the <link> elts
   (let [ns-sym (first spec)
-        _ (println "ns sym: " ns-sym)
+        ;; _ (println "ns sym: " ns-sym)
         ns-obj (find-ns ns-sym)
-        _ (println "ns obj: " ns-obj)
-        _ (println "ns obj map?: " (map? ns-obj))
-        _ (println "ns meta: " (meta ns-obj))
+        ;; _ (println "ns obj: " ns-obj)
+        ;; _ (println "ns obj map?: " (map? ns-obj))
+        ;; _ (println "ns meta: " (meta ns-obj))
         pfx-sym (symbol (str ns-sym) "pfx")
-        _ (println "ns pfx-sym: " pfx-sym)
+        ;; _ (println "ns pfx-sym: " pfx-sym)
         pfx-var  (resolve pfx-sym)
-        _ (println "ns pfx-var: " pfx-var)
+        ;; _ (println "ns pfx-var: " pfx-var)
         pfx (if pfx-var (deref pfx-var) "") ;;(throw (Exception. (str "Resource " pfx-sym " not found."))))
-        _ (println "ns pfx val: " (pr-str pfx))
+        ;; _ (println "ns pfx val: " (pr-str pfx))
         options (apply hash-map (rest spec))
         as-opt (:as options)
-        _ (println ":as " as-opt)
+        ;; _ (println ":as " as-opt)
         refer-opts (doall (:refer options))
-        _ (println ":refer " refer-opts)
+        ;; _ (println ":refer " refer-opts)
         ns-type (:resource-type (meta ns-obj))
-        _ (println "ns-type: " ns-type)
+        ;; _ (println "ns-type: " ns-type)
         ]
 
     (if as-opt (clojure.core/alias as-opt ns-sym))
@@ -1985,17 +1988,17 @@
       ;; iterate over everything in the ns map
 
       :else
-      (do (println "\nFOR [ref " refer-opts "]")
+      (do ;;(println "\nFOR [ref " refer-opts "]")
           (for [ref refer-opts]
             (let [ref-sym (symbol (str ns-sym) (str ref))
-                  _ (println "\nREF: " ref)
-                  _ (println "refsym: " ref-sym)
-                  _ (println "refsym meta:")
-                  _ (pp/pprint (meta (find-var ref-sym)))
+                  ;; _ (println "\nREF: " ref)
+                  ;; _ (println "refsym: " ref-sym)
+                  ;; _ (println "refsym meta:")
+                  ;; _ (pp/pprint (meta (find-var ref-sym)))
                   ref-var (find-var ref-sym)]
               (if ref-var
-                (do (println "ref-var: " ref-var)
-                    (println "ref-var meta: " (meta ref-var))
+                (do ;;(println "ref-var: " ref-var)
+                    ;; (println "ref-var meta: " (meta ref-var))
                     (if (bound? ref-var)
                       (if (:co-type (meta ref-var))
                         (let [uri (:uri (meta ref-var))]
@@ -2003,29 +2006,29 @@
                           (element :link {:rel "import" :href uri}))
                         (throw (Exception. (str "var " ref-var " not a co-type"))))
                       (throw (Exception. (str "ref-var " ref-var " not bound")))))
-                (let [_ (println "var for sym: " ref-sym " not found in ns; searching map")
+                (let [;;_ (println "var for sym: " ref-sym " not found in ns; searching map")
                       ns-map-sym (symbol (str ns-sym) (str ns-sym))
-                      _ (println "ns-map-sym: " ns-map-sym)
+                      ;; _ (println "ns-map-sym: " ns-map-sym)
                       ns-map-var (resolve ns-map-sym)
-                      _ (println "ns-map-var: " ns-map-var)
+                      ;; _ (println "ns-map-var: " ns-map-var)
                       ns-map (if ns-map-var
                                (deref ns-map-var)
                                (throw (Exception. (str "Symbol '" ref-sym "' unresolvable"))))
                       ;; _ (println "ns-map val: " ns-map)
 
                       ref-kw (keyword ref)
-                      _ (println "ref kw:" ref-kw)
+                      ;; _ (println "ref kw:" ref-kw)
                       elt-spec (get ns-map ref-kw)
-                      _ (println "elt-spec: " (pr-str elt-spec))
+                      ;; _ (println "elt-spec: " (pr-str elt-spec))
                       elt-kw (first elt-spec)
-                      _ (println "elt-kw: " elt-kw)
+                      ;; _ (println "elt-kw: " elt-kw)
                       uri (str pfx "/" (second elt-spec))
-                      _ (println "link href: " uri)
+                      ;; _ (println "link href: " uri)
                       ]
                   (if (nil? elt-kw) (throw (Exception. (str "definition for '" ref-sym "' not found"))))
                   ;; step 2
-                  (def-cotype ns-sym ref elt-kw uri)
-                  (println "*NS* " *ns*)
+                  (html-constructor ns-sym ref elt-kw uri)
+                  ;; (println "*NS* " *ns*)
                   ;; step 3
                   (if verify? (verify-resource uri spec))
                   (element :link {:rel "import" :href uri})))))))))
@@ -2043,7 +2046,7 @@
     (eval
      (macroexpand
       `(let [ns-basic# (first ~arg)]
-         (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
+         ;; (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
              (clojure.core/require ns-basic# :reload)
              ;; make sure file actually has ns decl
              (if (find-ns ns-basic#) nil (throw (Exception. (str "ns not declared: " ns-basic#))))))))
@@ -2058,7 +2061,7 @@
                                        (doall r#)
                                        r#))))]
        (doall link-elts#)
-       (println "REQUIREd: " link-elts#)
+       ;; (println "REQUIREd: " link-elts#)
        link-elts#)))
            ;;   (element :foo))))))
 
@@ -2198,28 +2201,28 @@
   (println "IMPORT-RESOURCE :POLYMER-STYLE-MODULE: " spec)
   (let [nsp (first spec)
         import-ns (find-ns nsp)
-        _ (println "import ns: " import-ns)
-        _ (println "import ns meta: " (meta import-ns))
+        ;; _ (println "import ns: " import-ns)
+        ;; _ (println "import ns meta: " (meta import-ns))
         resource-type (:resource-type (meta import-ns))
         styles (rest spec)
-        _ (println "styles : " styles)
+        ;; _ (println "styles : " styles)
 
         style-pfx-sym (symbol (str (ns-name import-ns)) "pfx")
-        _ (println "style-pfx-sym: " style-pfx-sym)
+        ;; _ (println "style-pfx-sym: " style-pfx-sym)
         style-pfx-var (find-var style-pfx-sym)
-        _ (println "style-pfx-var: " style-pfx-var)
+        ;; _ (println "style-pfx-var: " style-pfx-var)
         style-pfx (deref style-pfx-var)
-        _ (println "style-pfx: " style-pfx)
+        ;; _ (println "style-pfx: " style-pfx)
 
         style-path-sym (symbol (str (ns-name import-ns)) "uri")
-        _ (println "style-path-sym: " style-path-sym)
+        ;; _ (println "style-path-sym: " style-path-sym)
         style-path-var (find-var style-path-sym)
-        _ (println "style-path-var: " style-path-var)
+        ;; _ (println "style-path-var: " style-path-var)
         style-path (deref style-path-var)
-        _ (println "style-path: " style-path)
+        ;; _ (println "style-path: " style-path)
 
         style-uri (str style-pfx "/" style-path)
-        _ (println "style-uri: " style-uri)
+        ;; _ (println "style-uri: " style-uri)
         iores (if verify? (verify-resource style-uri spec))
 
         result
@@ -2230,9 +2233,9 @@
            (do #_(println "style name: " style)
                (let [style-sym (symbol
                                 (str (ns-name import-ns)) (str style))
-                     _ (println "style-sym: " style-sym)
+                     ;; _ (println "style-sym: " style-sym)
                      style-var (find-var style-sym)
-                     _ (println "style-var: " style-var)
+                     ;; _ (println "style-var: " style-var)
                      style-ref (if style-var
                                  (deref style-var)
                                  (throw (Exception. (str "symbol '" style-sym "' not found"))))]
@@ -2260,12 +2263,6 @@
 (defmacro import
   [& args]
   ;; (println "import: " args)
-  ;; (for [arg args]
-    ;; `(do
-    ;;    (println "IMPORTing: " ~arg)
-    ;;    (let [imports# (get-import ~arg)]
-    ;;      (println "IMPORTed: " imports#)
-    ;;      imports#))))
   (let [args (if (= :verify (first args))
                (do
                  (reset! verify? true)
@@ -2293,10 +2290,63 @@
 
 (defmacro co-dom
   [nm & args]
-  (println "CO-DOM: " (str nm) " ARGS: " args)
-  `(do (println "CO-dom: " ~(str nm) ~@args)
+  (println "CO-DOM: " (str nm)) ;; " ARGS: " args)
+  `(do ;;(println "CO-dom: " ~(str nm) ~@args)
        (let [tree# (apply element :ROOT_333109 {:id ~(str nm)} (list ~@args))]
-         (println "COCO-DOM: " tree#)
          (xsl-xform xsl-normalize-co-dom tree#))))
+
+(def polymer-prop-descriptors
+  {:type "type", :value "value", :notify "notify", :read-only "readOnly",
+   :reflect-to-attribute "reflectToAttribute", :observer "observer", :computed "computed"})
+
+(defn construct-properties
+  [props]
+  (str "properties: {\n\t    "
+       (str/join ",\n\t    "
+                 (for [prop props]
+                   (str prop ": {"
+                        (str/join ", " (for [[k v] (meta prop)]
+                                         (let [nm (get polymer-prop-descriptors k)]
+                                           (if nm
+                                             (str nm ": " (pr-str v))
+                                             (throw (Exception. (str "Invalid property descriptor: " k)))))))
+                        "}")))
+       "\n\t  }"))
+
+(defn js-constructor
+  [nm props & args]
+  (println "JS-CONSTRUCTOR: " (str nm) " PROPS: " props " PROTOS: " args)
+  (let [is-str (str "is: '" nm "'")
+        props-str (construct-properties props)
+        ctor-str (str "\n\tPolymer({\n\t  "
+                      (str/join ",\n\t  "
+                                [is-str
+                                 props-str])
+                      "\n\t})\n\t")]
+    ;; (println "PROPS: " props-str)
+    (element :script ctor-str)))
+
+(defmacro co-type
+  [nm & args]
+  (println "CO-TYPE: " (str nm)) ;; " ARGS: " args)
+  (let [[docstr arglist cod protos] args
+        codom (drop 1 cod)
+        js-ctor (js-constructor nm arglist protos)]
+    ;; (println "co-type args: " arglist)
+    ;; (println "co-type codom: " codom)
+    ;; (println "co-type protos: " protos)
+    ;; (println "co-type js-ctor: " js-ctor)
+
+    `(do
+       (html-constructor ~*ns* '~nm (keyword '~nm) (ns->uri ~*ns*))
+       ;;[ns-sym nm-sym elt-kw uri & docstring]
+       (let [tree# (co-dom ~nm ~@codom)
+             content# (:content tree#)]
+         (update tree# :content (fn [c#]
+                                  (let [dom# (last c#)
+                                        newd# (update dom# :content (fn [domc#]
+                                                                      (concat domc# [~js-ctor])))]
+                                    ;; (println "NEWD: " newd#)
+                                    (concat (butlast c#) [newd#]))))))))
 
 ;;(println "loaded miraj.markup")
