@@ -12,7 +12,8 @@
   (:refer-clojure :exclude [import require])
   (:require [clojure.string :as str]
             [clojure.pprint :as pp]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            polymer.behaviors)
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -2313,28 +2314,51 @@
                         "}")))
        "\n\t  }"))
 
+(defn construct-behaviors
+  [protos]
+  (println "CONSTRUCT-BEHAVIORS: " protos)
+  (str "behaviors: [\n\t    "
+       (str/join ",\n\t    "
+                 (for [proto protos]
+                   (str proto)))
+       "\n\t  ]"))
+
 (defn js-constructor
-  [nm props & args]
-  (println "JS-CONSTRUCTOR: " (str nm) " PROPS: " props " PROTOS: " args)
+  [nm props & protos]
+  (println "JS-CONSTRUCTOR: " (str nm) " PROPS: " props " PROTOS: " protos)
   (let [is-str (str "is: '" nm "'")
         props-str (construct-properties props)
+        protos-str (apply construct-behaviors protos)
         ctor-str (str "\n\tPolymer({\n\t  "
                       (str/join ",\n\t  "
                                 [is-str
-                                 props-str])
+                                 props-str
+                                 protos-str])
                       "\n\t})\n\t")]
     ;; (println "PROPS: " props-str)
     (element :script ctor-str)))
 
+(defn get-proto-codefs
+  [protos]
+  (println "GET-PROTO-CODEFS: " protos)
+  (for [proto protos]
+    (let [pfx polymer.behaviors/pfx
+          config polymer.behaviors/polymer.behaviors
+          uri (str pfx "/" (get config (keyword proto)))]
+      ;;(println "uri: " uri)
+      (element :link {:rel "import"
+                      :href uri}))))
+
 (defmacro co-type
   [nm & args]
   (println "CO-TYPE: " (str nm)) ;; " ARGS: " args)
-  (let [[docstr arglist cod protos] args
+  (let [[docstr arglist cod & protos] args
         codom (drop 1 cod)
+        proto-codefs (get-proto-codefs protos)
         js-ctor (js-constructor nm arglist protos)]
     ;; (println "co-type args: " arglist)
     ;; (println "co-type codom: " codom)
-    ;; (println "co-type protos: " protos)
+    (println "co-type protos: " proto-codefs)
     ;; (println "co-type js-ctor: " js-ctor)
 
     `(do
@@ -2347,6 +2371,8 @@
                                         newd# (update dom# :content (fn [domc#]
                                                                       (concat domc# [~js-ctor])))]
                                     ;; (println "NEWD: " newd#)
-                                    (concat (butlast c#) [newd#]))))))))
+                                    (concat (butlast c#)
+                                            [~@proto-codefs]
+                                            [newd#]))))))))
 
 ;;(println "loaded miraj.markup")
