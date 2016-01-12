@@ -39,6 +39,21 @@
 
 (defn ns->uri [n] (str/replace n #"\." "/"))
 
+(defmacro interface-sym->protocol-sym
+  "Protocol names cannot contain '.'"
+  [sym]
+  ;; (println "interface-sym->protocol-sym: " sym)
+  `(if (var? (resolve ~sym))
+     (symbol (str (->> (resolve ~sym) meta :ns))
+            (str (->> (resolve ~sym) meta :name)))
+     (let [nodes# (str/split (str ~sym) #"\.")
+           ns# (str/join "." (drop-last nodes#))
+           _# (println "ns: " ns#)
+           nm# (last nodes#)
+           newsym# (symbol (str ns#) (str nm#))]
+       ;; (println "interface-sym->protocol-sym: " ~sym " => " newsym#)
+       newsym#)))
+
 (def html5-void-elts
   #{"area" "base" "br" "col"
    "embed" "hr" "img" "input"
@@ -1406,7 +1421,7 @@
 
 (defn make-resource-fns
   [typ tags]
-  (do ;;(println "make-resource-fns: " typ tags)
+  (do (println "make-resource-fns: " typ tags)
         (doseq [[fn-tag elt-kw elt-uri docstring] tags]
           (do #_(println "make resource:" fn-tag elt-kw elt-uri docstring)
               (eval `(defn ~fn-tag ~docstring
@@ -1972,7 +1987,7 @@
         ;; _ (println "ns pfx val: " (pr-str pfx))
         options (apply hash-map (rest spec))
         as-opt (:as options)
-        ;; _ (println ":as " as-opt)
+        _ (println ":as " as-opt)
         refer-opts (doall (:refer options))
         ;; _ (println ":refer " refer-opts)
         ns-type (:resource-type (meta ns-obj))
@@ -2007,7 +2022,8 @@
                     (if (bound? ref-var)
                       (if (:co-type (meta ref-var))
                         (let [uri (:uri (meta ref-var))]
-                          (if verify? (verify-resource uri spec))
+                          ;; FIXME: this verify doesn't work with user-defined components
+                          ;; (if verify? (verify-resource uri spec))
                           (element :link {:rel "import" :href uri}))
                         (throw (Exception. (str "var " ref-var " not a co-type"))))
                       (throw (Exception. (str "ref-var " ref-var " not bound")))))
@@ -2213,11 +2229,12 @@
         ;; _ (println "styles : " styles)
 
         style-pfx-sym (symbol (str (ns-name import-ns)) "pfx")
-        ;; _ (println "style-pfx-sym: " style-pfx-sym)
+        _ (println "style-pfx-sym: " style-pfx-sym)
         style-pfx-var (find-var style-pfx-sym)
-        ;; _ (println "style-pfx-var: " style-pfx-var)
-        style-pfx (deref style-pfx-var)
-        ;; _ (println "style-pfx: " style-pfx)
+        _ (println "style-pfx-var: " style-pfx-var)
+        style-pfx (if style-pfx-var (deref style-pfx-var)
+                      (throw (Exception. (str "Resource " style-pfx-sym " not found"))))
+        _ (println "style-pfx: " style-pfx)
 
         style-path-sym (symbol (str (ns-name import-ns)) "uri")
         ;; _ (println "style-path-sym: " style-path-sym)
@@ -2235,19 +2252,22 @@
          (list (element :link {:rel "import" :href style-uri}))
          ;; SHARED STYLES!
          (for [style styles]
-           (do #_(println "style name: " style)
-               (let [style-sym (symbol
-                                (str (ns-name import-ns)) (str style))
-                     ;; _ (println "style-sym: " style-sym)
-                     style-var (find-var style-sym)
-                     ;; _ (println "style-var: " style-var)
-                     style-ref (if style-var
-                                 (deref style-var)
-                                 (throw (Exception. (str "symbol '" style-sym "' not found"))))]
+           (do (println "style name: " style)
+
+               ;;FIXME - this verification doesn't work with style modules
+               ;; (let [style-sym (symbol
+               ;;                  (str (ns-name import-ns)) (str style))
+               ;;       _ (println "style-sym: " style-sym)
+               ;;       style-var (find-var style-sym)
+               ;;       _ (println "style-var: " style-var)
+               ;;       style-ref (if style-var
+               ;;                   (deref style-var)
+               ;;                   (throw (Exception. (str "symbol '" style-sym "' not found"))))]
+
                  ;;TODO verify ref'ed custom style is actually in the style module resource
                  ;; (println "style ref: " style-ref)
                  (element :style {;; :is "custom-style"
-                                  :include style-ref})))))]
+                                  :include style}))))]
     result))
 
 (defn get-import
@@ -2395,6 +2415,7 @@
 (defn construct-listeners
   [protos]
   (println "CONSTRUCT-LISTENERS: " protos)
+  (if (seq protos)
   (str "listeners: [\n\t    "
        (str/join ",\n\t    "
                  ;;(doall
@@ -2420,7 +2441,7 @@
                                                            (first (first (nnext method))))
                                                       (first method))
                                                 _ (println "LISTENER EVT: " evt)
-                                                handler (str "__"
+                                                handler (str "_"
                                                              (if (= 'with-element (first method))
                                                                (str (name (first (next method))) "_"
                                                                     (first (first (nnext method))))
@@ -2434,11 +2455,12 @@
                                      (if (= :polymer-events resource-type)
                                        (concat result meths)
                                        result))))))))
-       "\n\t  ]"))
+       "\n\t  ]")))
 
 (defn construct-defns
   [protos]
   (println "CONSTRUCT-DEFNS: " protos)
+  (if (seq protos)
   (str/join ",\n\t  "
             ;;(doall
             (loop [proto (interface-sym->protocol-sym (first protos))
@@ -2472,7 +2494,7 @@
                                         cljs-form (cljs-compile raw-form)
                                         _ (println "CLJS FORM: " cljs-form)
                                         fn-name (if (= :polymer-events resource-type)
-                                                  (str "__" cljs-var) (str cljs-var))]
+                                                  (str "_" cljs-var) (str cljs-var))]
                                     (do (println "DEFN METHOD: " cljs-var ": " cljs-form)
                                         (str fn-name
                                              " : "
@@ -2484,11 +2506,11 @@
                       (println "DEFN METHS: " (doall meths))
                       (recur (first next-proto)
                              (rest next-proto)
-                             (concat result meths)))))))))
+                             (concat result meths))))))))))
 
 (defn js-constructor
   [nm props & protos]
-  (println "JS-CONSTRUCTOR: " (str nm) " PROPS: " props " PROTOS: " protos)
+  (println "JS-CONSTRUCTOR: " (str nm) " PROPS: " props " PROTOS: " protos (seq protos))
   (let [is-str (str "is: '" nm "'")
         props-str (construct-properties props)
         behaviors-str (apply construct-behaviors protos)
@@ -2496,11 +2518,11 @@
         defns-str (apply construct-defns protos)
         ctor-str (str "\n\tPolymer({\n\t  "
                       (str/join ",\n\t  "
-                                [is-str
-                                 props-str
-                                 behaviors-str
-                                 listeners-str
-                                 defns-str])
+                                (remove nil? [is-str
+                                 (if props-str props-str)
+                                 (if behaviors-str behaviors-str)
+                                 (if listeners-str listeners-str)
+                                 (if defns-str defns-str)]))
                       "\n\t})\n\t")]
     ;; (println "PROPS: " props-str)
     (element :script ctor-str)))
@@ -2543,21 +2565,6 @@
 (defn protocol?
   [maybe-p]
   (boolean (:on-interface maybe-p)))
-
-(defmacro interface-sym->protocol-sym
-  "Protocol names cannot contain '.'"
-  [sym]
-  ;; (println "interface-sym->protocol-sym: " sym)
-  `(if (var? (resolve ~sym))
-     (symbol (str (->> (resolve ~sym) meta :ns))
-            (str (->> (resolve ~sym) meta :name)))
-     (let [nodes# (str/split (str ~sym) #"\.")
-           ns# (str/join "." (drop-last nodes#))
-           _# (println "ns: " ns#)
-           nm# (last nodes#)
-           newsym# (symbol (str ns#) (str nm#))]
-       ;; (println "interface-sym->protocol-sym: " ~sym " => " newsym#)
-       newsym#)))
 
 (defn- parse-opts+specs [opts+specs]
   (println "parse-opts+specs: " opts+specs)
@@ -2690,6 +2697,7 @@
   [nm & args]
   (println "CO-TYPE: " (str nm)) ;; " ARGS: " args)
   (let [[docstr arglist cod & protos] args
+        _ (println "CO-TYPE PROTOS: " protos (seq protos))
         codom (drop 1 cod)
         proto-codefs (parse-opts+specs protos)
         _ (println (str "PROTO-CODEFS: " proto-codefs))
@@ -2703,14 +2711,36 @@
        (html-constructor ~*ns* '~nm (keyword '~nm) (ns->uri ~*ns*))
        ;;[ns-sym nm-sym elt-kw uri & docstring]
        (let [tree# (co-dom ~nm ~@codom)
-             content# (:content tree#)]
-         (update tree# :content (fn [c#]
-                                  (let [dom# (last c#)
-                                        newdom# (update dom# :content (fn [domc#]
-                                                                      (concat domc# [~js-ctor])))]
-                                    ;; (println "NEWD: " newdom#)
-                                    (concat (butlast c#)
-                                            [~@proto-codefs]
-                                            [newdom#]))))))))
+             content# (:content tree#)
+             result# (update tree#
+                            :content (fn [c#]
+                                       (let [dom# (last c#)
+                                             newdom# (update dom#
+                                                             :content (fn [domc#]
+                                                                        (concat domc# [~js-ctor])))]
+                                         ;; (println "NEWD: " newdom#)
+                                         (concat (butlast c#)
+                                                 [~@proto-codefs]
+                                                 [newdom#]))))]
+         (alter-meta! (find-var (symbol (str ~*ns*) (str '~nm)))
+                      (fn [old# new#]
+                        (merge old# new#))
+                      {:miraj {:co-type true
+                               :co-ctor result#}})
+         result#))))
+
+;; we need co-syntax for co-application (observation)
+;; Alternatives:
+;; (observe my-foo)
+;; (my-foo :observe)
+;; (<<! my-foo)
+(defmacro <<!
+  [e]
+  `(do
+     ;; (println "OBSERVING: " '~e (type '~e))
+     ;; (println (str (meta (find-var '~e))))
+     (let [result# (:co-ctor (:miraj (meta (find-var '~e))))]
+       (println "CO-CTOR: " result#)
+       (serialize result#))))
 
 ;;(println "loaded miraj.markup")

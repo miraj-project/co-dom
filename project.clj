@@ -3,7 +3,7 @@
   :url "https://github.com/mobileink/miraj.markup"
   :source-paths ["src/main/clj"]
   :dependencies [[org.clojure/clojure "1.8.0-RC4"]
-                 [polymer/behaviors "1.2.3-SNAPSHOT"]]
+                 [org.clojure/clojurescript "1.7.228"]]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
                    :source-paths ["src/main/clj"] ;; "src/test/clj" "dev"]
                    :dependencies [[polymer/paper "1.2.3-SNAPSHOT"]
