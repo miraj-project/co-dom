@@ -2717,7 +2717,7 @@
       ;;   (element :link {:rel "import"
       ;;                   :href uri}))))))
 
-(defmacro co-type
+(defmacro def-cotype
   [nm & args]
   (println "CO-TYPE: " (str nm)) ;; " ARGS: " args)
   (let [[docstr arglist cod & protos] args
