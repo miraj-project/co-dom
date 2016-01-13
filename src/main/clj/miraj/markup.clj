@@ -413,13 +413,13 @@
 
    "<xsl:template match='ROOT_333109' priority='99'>"
      "<xsl:copy>"
+       "<xsl:element name='link'>"
+         "<xsl:attribute name='rel'>import</xsl:attribute>"
+         "<xsl:attribute name='href'>"
+           "<xsl:text>/bower_components/polymer/polymer.html</xsl:text>"
+         "</xsl:attribute>"
+       "</xsl:element>"
        "<xsl:apply-templates select='//link' mode='head'/>"
-       ;; FIXME this is temporary:
-       ;; "<xsl:element name='script'>"
-       ;;   "<xsl:attribute name='src'>"
-       ;;     "<xsl:text>/scripts/main.js</xsl:text>"
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:element>"
        "<xsl:element name='dom-module'>"
          "<xsl:attribute name='id'>"
            "<xsl:value-of select='@id'/>"
@@ -1415,8 +1415,7 @@
                                  [attrs content] (parse-elt-args first rest)]
                              (apply element elt-kw attrs content)))]
                 elt)))))
-
-  ;; (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
+  ;; (alter-meta! (find-var ns-sym nm-sym)
   ;;              (fn [old new]
   ;;                (merge old new))
   ;;              {:miraj {:co-fn true
@@ -2015,13 +2014,13 @@
           ;; iterate over everything in the ns map
 
           :else
-          (do ;;(println "\nFOR [ref " refer-opts "]")
+          (do (println "\nFOR [ref " refer-opts "]")
             (for [ref refer-opts]
               (let [ref-sym (symbol (str ns-sym) (str ref))
-                    ;; _ (println "\nREF: " ref)
-                    ;; _ (println "refsym: " ref-sym)
-                    ;; _ (println "refsym meta:")
-                    ;; _ (pp/pprint (meta (find-var ref-sym)))
+                    _ (println "\nREF: " ref)
+                    _ (println "refsym: " ref-sym)
+                    _ (println "refsym meta:")
+                    _ (pp/pprint (meta (find-var ref-sym)))
                     ref-var (find-var ref-sym)]
                 (if ref-var
                   (do ;;(println "ref-var: " ref-var)
@@ -2422,47 +2421,53 @@
 (defn construct-listeners
   [protos]
   (println "CONSTRUCT-LISTENERS: " protos)
-  (if (seq protos)
-  (str "listeners: {\n\t    "
-       (str/join ",\n\t    "
-                 ;;(doall
-                 (loop [proto (first protos)
-                        tail (rest protos)
-                        result ""]
-                    (if (nil? proto)
-                      result
-                      (let [proto (interface-sym->protocol-sym proto)
-                            resource-type (:resource-type (meta (resolve proto)))]
-                        (println "LISTENER PROTO: " proto)
-                        (println "LISTENER TYPE: " resource-type)
-                        (println "LISTENER TAIL: " tail)
-                        (println "LISTENER RESULT: " result)
-                        (let [methods (take-while seq? tail)
-                              next-proto (drop-while seq? tail)]
-                          (println "LISTENER METHODS: " methods (type methods))
-                          (println "NEXT PROTO: " next-proto)
-                            (let [meths (for [method methods]
-                                          (let [_ (println "LISTENER METHOD: " method)
-                                                evt (if (= 'with-element (first method))
-                                                      (str (name (first (next method))) "."
-                                                           (first (first (nnext method))))
-                                                      (first method))
-                                                _ (println "LISTENER EVT: " evt)
-                                                handler (str "_"
-                                                             (if (= 'with-element (first method))
-                                                               (str (name (first (next method))) "_"
-                                                                    (first (first (nnext method))))
-                                                               (first method)))
-                                                _ (println "LISTENER HANDLER: " handler)
-                                                ]
-                                            (str "'" evt "' : '" handler "'")))]
-                              (println "LISTENER METHS: " (doall meths))
-                              (recur (first next-proto)
-                                     (next next-proto)
-                                     (if (= :polymer-events resource-type)
-                                       (concat result meths)
-                                       result))))))))
-       "\n\t  }")))
+  (let [ls (filter (fn [p] (and (symbol? p)
+                                    (= :polymer-events
+                                       (:resource-type
+                                        (meta (resolve (interface-sym->protocol-sym p)))))))
+                   protos)]
+    (println "FILTERED LISTENERS: " ls)
+    (if (seq ls)
+      (str "listeners: {\n\t    "
+           (str/join ",\n\t    "
+                     ;;(doall
+                     (loop [proto (first protos)
+                            tail (rest protos)
+                            result ""]
+                       (if (nil? proto)
+                         result
+                         (let [proto (interface-sym->protocol-sym proto)
+                               resource-type (:resource-type (meta (resolve proto)))]
+                           (println "LISTENER PROTO: " proto)
+                           (println "LISTENER TYPE: " resource-type)
+                           (println "LISTENER TAIL: " tail)
+                           (println "LISTENER RESULT: " result)
+                           (let [methods (take-while seq? tail)
+                                 next-proto (drop-while seq? tail)]
+                             (println "LISTENER METHODS: " methods (type methods))
+                             (println "NEXT PROTO: " next-proto)
+                             (let [meths (for [method methods]
+                                           (let [_ (println "LISTENER METHOD: " method)
+                                                 evt (if (= 'with-element (first method))
+                                                       (str (name (first (next method))) "."
+                                                            (first (first (nnext method))))
+                                                       (first method))
+                                                 _ (println "LISTENER EVT: " evt)
+                                                 handler (str "_"
+                                                              (if (= 'with-element (first method))
+                                                                (str (name (first (next method))) "_"
+                                                                     (first (first (nnext method))))
+                                                                (first method)))
+                                                 _ (println "LISTENER HANDLER: " handler)
+                                                 ]
+                                             (str "'" evt "' : '" handler "'")))]
+                               (println "LISTENER METHS: " (doall meths))
+                               (recur (first next-proto)
+                                      (next next-proto)
+                                      (if (= :polymer-events resource-type)
+                                        (concat result meths)
+                                        result))))))))
+           "\n\t  }"))))
 
 (defn construct-defns
   [protos]
@@ -2514,7 +2519,7 @@
                                                (cljs-compile raw-form)
                                                (str "function("
                                                     (str/join ", " args)
-                                                    ") { " (apply str raw-form) "}"))
+                                                    ") { " (apply str raw-form) "\n\t\t}"))
                                         _ (println "FORM: " form)
                                         fn-name (if (= :polymer-events resource-type)
                                                   (str "_" cljs-var) (str cljs-var))]
@@ -2539,14 +2544,15 @@
         behaviors-str (apply construct-behaviors protos)
         listeners-str (apply construct-listeners protos)
         defns-str (apply construct-defns protos)
-        ctor-str (str "\n\tPolymer({\n\t  "
+        ctor-str (str "\n(function () {\n\t 'use strict';\n"
+                  "\n\tPolymer({\n\t  "
                       (str/join ",\n\t  "
                                 (remove nil? [is-str
                                  (if props-str props-str)
                                  (if behaviors-str behaviors-str)
                                  (if listeners-str listeners-str)
                                  (if defns-str defns-str)]))
-                      "\n\t})\n\t")]
+                      "\n\t});\n})();\n\t")]
     ;; (println "PROPS: " props-str)
     (element :script ctor-str)))
 
@@ -2720,6 +2726,7 @@
 (defmacro def-cotype
   [nm & args]
   (println "CO-TYPE: " (str nm)) ;; " ARGS: " args)
+  (println "CO-TYPE ARGS: " args)
   (let [[docstr arglist cod & protos] args
         _ (println "CO-TYPE PROTOS: " protos (seq protos))
         codom (drop 1 cod)
@@ -2732,7 +2739,7 @@
     ;; (println "co-type js-ctor: " js-ctor)
 
     `(do
-       (html-constructor ~*ns* '~nm (keyword '~nm) (ns->uri ~*ns*))
+       (html-constructor ~*ns* '~nm (keyword '~nm) (str (ns->uri ~*ns*) "/" '~nm))
        ;;[ns-sym nm-sym elt-kw uri & docstring]
        (let [tree# (co-dom ~nm ~@codom)
              content# (:content tree#)
