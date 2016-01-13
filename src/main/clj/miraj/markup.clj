@@ -414,6 +414,12 @@
    "<xsl:template match='ROOT_333109' priority='99'>"
      "<xsl:copy>"
        "<xsl:apply-templates select='//link' mode='head'/>"
+       ;; FIXME this is temporary:
+       ;; "<xsl:element name='script'>"
+       ;;   "<xsl:attribute name='src'>"
+       ;;     "<xsl:text>/scripts/main.js</xsl:text>"
+       ;;   "</xsl:attribute>"
+       ;; "</xsl:element>"
        "<xsl:element name='dom-module'>"
          "<xsl:attribute name='id'>"
            "<xsl:value-of select='@id'/>"
@@ -1421,7 +1427,7 @@
 
 (defn make-resource-fns
   [typ tags]
-  (do (println "make-resource-fns: " typ tags)
+  (do ;;(println "make-resource-fns: " typ tags)
         (doseq [[fn-tag elt-kw elt-uri docstring] tags]
           (do #_(println "make resource:" fn-tag elt-kw elt-uri docstring)
               (eval `(defn ~fn-tag ~docstring
@@ -1990,34 +1996,35 @@
         _ (println ":as " as-opt)
         refer-opts (doall (:refer options))
         ;; _ (println ":refer " refer-opts)
-        ns-type (:resource-type (meta ns-obj))
-        ;; _ (println "ns-type: " ns-type)
+        resource-type (:resource-type (meta ns-obj))
+        _ (println "RESOURCE-TYPE: " resource-type)
         ]
 
-    (if as-opt (clojure.core/alias as-opt ns-sym))
+    (if (= :polymer resource-type)
+      (do
+        (if as-opt (clojure.core/alias as-opt ns-sym))
+        (cond
+          (nil? refer-opts)
+          (let [uri ;;(get-href ns-sym)
+                (str ns-sym)
+                #_(str/replace (str ns-sym) #"\." "/")]
+            ;;(if verify? (verify-resource uri spec))
+            (element :link {:rel "import" :href uri}))
 
-    (cond
-      (nil? refer-opts)
-      (let [uri ;;(get-href ns-sym)
-            (str ns-sym)
-            #_(str/replace (str ns-sym) #"\." "/")]
-        ;;(if verify? (verify-resource uri spec))
-        (element :link {:rel "import" :href uri}))
+          ;; (= :all refer-opts)
+          ;; iterate over everything in the ns map
 
-      ;; (= :all refer-opts)
-      ;; iterate over everything in the ns map
-
-      :else
-      (do ;;(println "\nFOR [ref " refer-opts "]")
-          (for [ref refer-opts]
-            (let [ref-sym (symbol (str ns-sym) (str ref))
-                  ;; _ (println "\nREF: " ref)
-                  ;; _ (println "refsym: " ref-sym)
-                  ;; _ (println "refsym meta:")
-                  ;; _ (pp/pprint (meta (find-var ref-sym)))
-                  ref-var (find-var ref-sym)]
-              (if ref-var
-                (do ;;(println "ref-var: " ref-var)
+          :else
+          (do ;;(println "\nFOR [ref " refer-opts "]")
+            (for [ref refer-opts]
+              (let [ref-sym (symbol (str ns-sym) (str ref))
+                    ;; _ (println "\nREF: " ref)
+                    ;; _ (println "refsym: " ref-sym)
+                    ;; _ (println "refsym meta:")
+                    ;; _ (pp/pprint (meta (find-var ref-sym)))
+                    ref-var (find-var ref-sym)]
+                (if ref-var
+                  (do ;;(println "ref-var: " ref-var)
                     ;; (println "ref-var meta: " (meta ref-var))
                     (if (bound? ref-var)
                       (if (:co-type (meta ref-var))
@@ -2027,32 +2034,32 @@
                           (element :link {:rel "import" :href uri}))
                         (throw (Exception. (str "var " ref-var " not a co-type"))))
                       (throw (Exception. (str "ref-var " ref-var " not bound")))))
-                (let [;;_ (println "var for sym: " ref-sym " not found in ns; searching map")
-                      ns-map-sym (symbol (str ns-sym) (str ns-sym))
-                      ;; _ (println "ns-map-sym: " ns-map-sym)
-                      ns-map-var (resolve ns-map-sym)
-                      ;; _ (println "ns-map-var: " ns-map-var)
-                      ns-map (if ns-map-var
-                               (deref ns-map-var)
-                               (throw (Exception. (str "Symbol '" ref-sym "' unresolvable"))))
-                      ;; _ (println "ns-map val: " ns-map)
+                  (let [;;_ (println "var for sym: " ref-sym " not found in ns; searching map")
+                        ns-map-sym (symbol (str ns-sym) (str ns-sym))
+                        ;; _ (println "ns-map-sym: " ns-map-sym)
+                        ns-map-var (resolve ns-map-sym)
+                        ;; _ (println "ns-map-var: " ns-map-var)
+                        ns-map (if ns-map-var
+                                 (deref ns-map-var)
+                                 (throw (Exception. (str "Symbol '" ref-sym "' unresolvable"))))
+                        ;; _ (println "ns-map val: " ns-map)
 
-                      ref-kw (keyword ref)
-                      ;; _ (println "ref kw:" ref-kw)
-                      elt-spec (get ns-map ref-kw)
-                      ;; _ (println "elt-spec: " (pr-str elt-spec))
-                      elt-kw (first elt-spec)
-                      ;; _ (println "elt-kw: " elt-kw)
-                      uri (str pfx "/" (second elt-spec))
-                      ;; _ (println "link href: " uri)
-                      ]
-                  (if (nil? elt-kw) (throw (Exception. (str "definition for '" ref-sym "' not found"))))
-                  ;; step 2
-                  (html-constructor ns-sym ref elt-kw uri)
-                  ;; (println "*NS* " *ns*)
-                  ;; step 3
-                  (if verify? (verify-resource uri spec))
-                  (element :link {:rel "import" :href uri})))))))))
+                        ref-kw (keyword ref)
+                        ;; _ (println "ref kw:" ref-kw)
+                        elt-spec (get ns-map ref-kw)
+                        ;; _ (println "elt-spec: " (pr-str elt-spec))
+                        elt-kw (first elt-spec)
+                        ;; _ (println "elt-kw: " elt-kw)
+                        uri (str pfx "/" (second elt-spec))
+                        ;; _ (println "link href: " uri)
+                        ]
+                    (if (nil? elt-kw) (throw (Exception. (str "definition for '" ref-sym "' not found"))))
+                    ;; step 2
+                    (html-constructor ns-sym ref elt-kw uri)
+                    ;; (println "*NS* " *ns*)
+                    ;; step 3
+                    (if verify? (verify-resource uri spec))
+                    (element :link {:rel "import" :href uri})))))))))))
 ;; (get-resource-elt ns-type ns-obj ref-sym comp)))))))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
@@ -2249,7 +2256,7 @@
 
         result
         (concat
-         (list (element :link {:rel "import" :href style-uri}))
+         (list (element :link {:rel "import" :href (str "/" style-uri)}))
          ;; SHARED STYLES!
          (for [style styles]
            (do (println "style name: " style)
@@ -2267,7 +2274,7 @@
                  ;;TODO verify ref'ed custom style is actually in the style module resource
                  ;; (println "style ref: " style-ref)
                  (element :style {;; :is "custom-style"
-                                  :include style}))))]
+                                  :include (str style)}))))]
     result))
 
 (defn get-import
@@ -2416,7 +2423,7 @@
   [protos]
   (println "CONSTRUCT-LISTENERS: " protos)
   (if (seq protos)
-  (str "listeners: [\n\t    "
+  (str "listeners: {\n\t    "
        (str/join ",\n\t    "
                  ;;(doall
                  (loop [proto (first protos)
@@ -2455,7 +2462,7 @@
                                      (if (= :polymer-events resource-type)
                                        (concat result meths)
                                        result))))))))
-       "\n\t  ]")))
+       "\n\t  }")))
 
 (defn construct-defns
   [protos]
@@ -2487,22 +2494,38 @@
                                         _ (println "cljs-var: " cljs-var)
                                         elt-id  (if (= 'with-element (first method))
                                                   (first (next method)) nil)
+                                        _ (println "elt-id: " elt-id)
+                                        fn-type (if elt-id
+                                                  (if (vector? (first (next (first (nnext method)))))
+                                                    :js :cljs)
+                                                  (if (vector? (first (next method))) :js :cljs))
+                                        _ (println "fn-type: " fn-type)
+                                        args (if elt-id
+                                               (first (next (first (nnext method))))
+                                               (first (rest method)))
+                                        _ (println "args: " args)
                                         raw-form (if elt-id
-                                                   (first (next (first (nnext method))))
-                                                   (first (rest method)))
-                                        _ (println "RAW FORM: " raw-form)
-                                        cljs-form (cljs-compile raw-form)
-                                        _ (println "CLJS FORM: " cljs-form)
+                                                   (if (= :cljs fn-type)
+                                                     (first (next (first (nnext method))))
+                                                     (rest (next (first (nnext method)))))
+                                                   (rest (rest method)))
+                                        _ (println "RAW FORM: " raw-form (type raw-form))
+                                        form (if (= :cljs fn-type)
+                                               (cljs-compile raw-form)
+                                               (str "function("
+                                                    (str/join ", " args)
+                                                    ") { " (apply str raw-form) "}"))
+                                        _ (println "FORM: " form)
                                         fn-name (if (= :polymer-events resource-type)
                                                   (str "_" cljs-var) (str cljs-var))]
-                                    (do (println "DEFN METHOD: " cljs-var ": " cljs-form)
+                                    (do (println "DEFN METHOD: " cljs-var ": " form)
                                         (str fn-name
-                                             " : "
+                                             ": "
                                              ;; HACK!  GHASTLY HACK!
                                              (if (= 'fn (first raw-form))
-                                               (subs cljs-form
-                                                     1 (- (.length cljs-form) 2))
-                                               (str cljs-form))))))]
+                                               (subs form
+                                                     1 (- (.length form) 2))
+                                               (str form))))))]
                       (println "DEFN METHS: " (doall meths))
                       (recur (first next-proto)
                              (rest next-proto)
@@ -2589,7 +2612,8 @@
                                (println "PROTO: " psym)
                                (println "PROTO var: " (resolve psym))
                                (println "meta PROTO var: " (meta (resolve psym)))
-                               [psym (:uri (meta (resolve psym)))]))
+                               (if (= :polymer (:resource-type (meta (resolve psym))))
+                                 [psym (:uri (meta (resolve psym)))])))
                            sigs))
         _ (println "URIs: " uris)
         interfaces (-> (map #(interface-sym->protocol-sym %) (keys impls))
