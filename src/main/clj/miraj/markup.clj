@@ -11,13 +11,16 @@
   miraj.markup
   (:refer-clojure :exclude [import require])
   (:require [clojure.string :as str]
+            [clojure.data.json :as json]
+            [clj-time.core :as t]
             [clojure.pprint :as pp]
             [clojure.java.io :as io]
             [clojure.tools.reader :as reader]
             [clojure.tools.reader.reader-types :as readers]
             [cljs.analyzer :as ana]
             [cljs.compiler :as c]
-            [cljs.closure :as cc])
+            [cljs.closure :as cc]
+            [cljs.env :as env])
             ;; [clojure.tools.logging :as log :only [trace debug error info]])
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -29,6 +32,7 @@
            [javax.xml.transform.stream StreamSource StreamResult]
            [java.nio.charset Charset]
            [java.io Reader]))
+;;           [java.util Date]))
 
 ;; (println "loading miraj/markup.clj")
 ;;FIXME:  support comment nodes
@@ -38,6 +42,14 @@
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
 
 (defn ns->uri [n] (str/replace n #"\." "/"))
+
+(defn var->cljsfilename [v]
+  (let [nm (:name (meta v))
+        namesp (:ns (meta v))
+        ns-name (ns-name namesp)
+        path (str/replace ns-name #"-|\." {"-" "_" "." "/"})
+        fn (str/replace nm #"-|\." {"-" "_" "." "/"})]
+    (str path "/" fn ".cljs")))
 
 (defmacro interface-sym->protocol-sym
   "Protocol names cannot contain '.'"
@@ -517,7 +529,7 @@
 (defn xsl-xform
   [ss elts]
   ;; (println "xsl-xform ss: " ss)
-  ;; (println "xsl-xform doc: " elts)
+  (println "xsl-xform doc: " elts)
   (let [ml (do
              (if (not (instance? miraj.markup.Element elts))
                (do (println (type elts))
@@ -1542,8 +1554,9 @@
 
 (defn co-compile
   [file doc & mode]
+  (println "CO-COMPILE to " file)
   (let [s (if (= (first mode) :pprint)
-            (do ;;(println "pprint")
+            (do (println "pprint")
                 (with-out-str (pprint doc)))
             (serialize doc))]
     (spit file s)))
@@ -2402,11 +2415,27 @@
 (defn read1 [str]
   (first (forms-seq (string-reader str))))
 
+;; (read1 "[1 :a 3]")
+;; (let [form (read1 "[:a :b]")]
+;;   (with-out-str (c/emit (ana/analyze user-env form))))
+
+;; (def cenv (atom {}))
+
+;; (let [form (read1 "[:a :b]")]
+;;   (binding [ana/*cljs-static-fns* true]
+;;     (emit-str
+;;       (env/with-compiler-env cenv
+;;         (ana/analyze user-env form)))))
+
+;; (let [form (read1 "js# [:a :b])")]
+;;   (cc/optimize {:optimizations :simple}
+;;     (emit-str (ana/analyze user-env form))))
 
 (defn cljs-compile
   [method]
   (println "CLJS-COMPILE: " method (type method))
-  (let [pgm (cc/optimize {:optimizations :simple}
+  (let [pgm (cc/optimize {:optimizations :simple
+                          :pretty-print true}
                          (emit-str (ana/analyze user-env method)))]
     ;(println "CLJS PGM: " pgm)
     pgm))
@@ -2415,7 +2444,8 @@
   [method]
   (println "CLJS-COMPILE-STR: " method (type method))
   (let [form (read1 method)]
-    (cc/optimize {:optimizations :simple}
+    (cc/optimize {:optimizations :advanced
+                  :pretty-print true}
                  (emit-str (ana/analyze user-env form)))))
 
 (defn construct-listeners
@@ -2759,6 +2789,353 @@
                       {:miraj {:co-type true
                                :co-ctor result#}})
          result#))))
+
+;; from clojure/core_deftype.clj
+;; reduce is defined again later after InternalReduce loads
+(defn ^:private ^:static
+  reduce1
+       ([f coll]
+             (let [s (seq coll)]
+               (if s
+         (reduce1 f (first s) (next s))
+                 (f))))
+       ([f val coll]
+          (let [s (seq coll)]
+            (if s
+              (if (chunked-seq? s)
+                (recur f
+                       (.reduce (chunk-first s) f val)
+                       (chunk-next s))
+                (recur f (f val (first s)) (next s)))
+         val))))
+
+(defn- assert-same-protocol [protocol-var method-syms]
+  (doseq [m method-syms]
+    (let [v (resolve m)
+          p (:protocol (meta v))]
+      (when (and v (bound? v) (not= protocol-var p))
+        (binding [*out* *err*]
+          (println "Warning: protocol" protocol-var "is overwriting"
+                   (if p
+                     (str "method " (.sym v) " of protocol " (.sym p))
+                     (str "function " (.sym v)))))))))
+
+(def property-types
+  {'Vector ^{:doc " (i.e. satisfy vector?)"} (fn [x] (vector? x))
+   'Map ^{:doc " (i.e. satisfy map?)"} (fn [x] (map? x))
+   'Boolean ^{:doc "  Allowed values are 'true' and 'false'."} (fn [x] (or (= 'true x) (= 'false x)))
+   'Date ^{:doc "[year month? day? hour? minute? second? millisecond?] (see clj-time) "} (fn [x]
+           (println "DATE ARG: " x (type x))
+           (and (vector? x)
+                (<= (count x) 7)
+                (not (empty? x))
+                (every? number? x)))
+   'Number number?
+   'String string?})
+
+(defn- emit-properties [name opts+sigs]
+  (let [iname (symbol (str (munge (namespace-munge *ns*)) "." (munge name)))
+        [opts sigs]
+        (loop [opts {:on (list 'quote iname)} sigs opts+sigs]
+          (condp #(%1 %2) (first sigs)
+            string? (recur (assoc opts :doc (first sigs)) (next sigs))
+            keyword? (recur (assoc opts (first sigs) (second sigs)) (nnext sigs))
+            [opts sigs]))
+        _ (println "PRESIGS: " sigs)
+        all-props (->> (map first (filter #(:tag (meta (first %))) sigs)))
+        _ (println "all-props: " all-props)
+        sigs (when sigs
+               (reduce1 (fn [m s]
+                          (println "REDUCE1 M: " m)
+                          (println "REDUCE1 S: " s)
+                          (let [name-meta (meta (first s))
+                                _ (println "name-meta: " name-meta)
+                                name-meta (dissoc (assoc name-meta :type (:tag name-meta))
+                                                              :tag)
+                                _ (println "name-meta: " name-meta)
+                                doc (:doc name-meta)
+                                prop-type (if (some (set [(:type name-meta)])
+                                                    (set (keys property-types)))
+                                              (:type name-meta)
+                                              'Observer)
+                                _ (println "prop-type: " prop-type)
+
+                                name-meta (if (= prop-type 'Observer)
+                                            (assoc name-meta :type 'Observer)
+                                            name-meta)
+                                _ (println "name-meta: " name-meta)
+                                mname (with-meta (first s) nil)
+                                _ (println "mname: " mname)
+
+                                _ (let [strs (filter string? s)]
+                                    (println "STRINGS: " strs)
+                                    (if (= prop-type 'String)
+                                      (if (> (count strs) 1)
+                                              (throw (IllegalArgumentException.
+                                                      (str "Too many String args for property: " mname))))
+                                      (if (not= prop-type 'Observer)
+                                        (if (> (count strs) 0)
+                                          (throw (IllegalArgumentException.
+                                                  (str "Illegal String arg for property: " mname)))))))
+
+                                default-val (let [v (if (= :computed (first (rest s)))
+                                                      (if (fn? (eval (first (nnext s))))
+                                                        (do (println "COMPUTED " (first (nnext s)))
+                                                            (first (nnext s)))
+                                                        (throw (IllegalArgumentException.
+                                                                (str "Computed value for "
+                                                                     mname
+                                                                     " must be a fn."))))
+                                                      (if (= prop-type 'Observer)
+                                                        nil
+                                                        (first (rest s))))]
+                                              (println "V: " v (fn? (eval v)))
+                                              (if (list? v) ;; a fn?
+                                                (if (= (first v) 'fn)
+                                                  (first (nnext v))
+                                                  v)
+                                                #_(throw (Exception. (str "don't understand " v))))
+                                              (if (= prop-type 'Date)
+                                                v
+                                                #_(.toString (apply t/date-time v))
+                                                v))
+                                _ (println "default-val: " default-val (type default-val))
+                                _ (if (not= prop-type 'Observer)
+                                    (if (not (nil? default-val))
+                                      (let [pred (get property-types prop-type)]
+                                        (println "pred: " pred)
+                                        (if (fn? (eval default-val))
+                                          (if (not (= :computed (first (rest s))))
+                                            (throw (IllegalArgumentException. (str "Default value "
+                                                                                   (pr-str default-val)
+                                                                                   " for "
+                                                                                   mname
+                                                                                   " must match type "
+                                                                                   prop-type
+                                                                                   ". "
+                                                                                   (:doc (meta pred))))))
+                                          (if (not (apply pred [default-val]))
+                                            (throw (IllegalArgumentException. (str "Default value "
+                                                                                   (pr-str default-val)
+                                                                                   " for "
+                                                                                   mname
+                                                                                   " must match type "
+                                                                                   prop-type
+                                                                                   ". "
+                                                                                   (:doc (meta pred))))))))))
+                                flags (filter keyword? s)
+                                _ (println "flags: " flags)
+                                ;; [observer doc]
+                                ;; (let [ss (filter #(not (or (string? %) (keyword? %))) s)]
+                                ;;   (println "ss: " ss)
+                                ;;   (loop [as [] rs (rest ss)]
+                                ;;     (println "rs: " rs (type rs))
+                                ;;     (if (list? (first rs))
+                                ;;       (recur (conj as (first rs)) (next rs))
+                                ;;       [(seq as) (first rs)])))
+                                _  (if (some #{:computed} flags)
+                                     (if (not (= :computed (nth s 1)))
+                                       (throw (Exception. (str "Flag :computed must be first arg: "
+                                                               mname)))))
+                                observer (let [obs (if (some #{:computed} flags)
+                                                     (do (println "COMPUTED HIT")
+                                                         (filter list? (next (nnext s))))
+                                                     (if (= prop-type 'Observer)
+                                                       (list (conj (rest s) 'fn))
+                                                       (filter list? s)))]
+                                           obs)
+                                ;; doc (let [ss (filter string? s)]
+                                ;;       (if (= 2 (count ss))
+                                ;;         (last ss)
+                                ;;         (if (= (first (next s)) (first ss)) nil (first ss))))
+                                _ (println "observer: " observer) ; (-> (first observer) next first))
+                                _ (println "doc: " doc)
+                                ]
+                            (when (> (count observer) 1)
+                              (throw (IllegalArgumentException. (str "Only one observer allowed for property " mname))))
+                            (if (not (empty? observer))
+                              (if (not= prop-type 'Observer)
+                                (let [argcount (count (-> (first observer) next first))]
+                                  (when (not= 2 argcount)
+                                    (throw (IllegalArgumentException.
+                                            (str "Definition of observer function for property "
+                                                 mname
+                                                 " must take exactly two args, for new and old vals, in that order.")))))))
+
+                            (cond
+                              (= prop-type 'Observer)
+                              (if (not (empty? flags))
+                                (throw (IllegalArgumentException. (str "Flags "
+                                                                       (pr-str flags)
+                                                                       " not allowed on multi-prop observer: " mname)))
+                                (let [args (fnext (first observer))]
+                                  (println "OBSERVER ARGS: " args)
+                                  (if (empty? args)
+                                    (throw (IllegalArgumentException. (str "Argument vector for multi-prop observer " mname " must not be empty."))))
+                                  (if (not (every? (set all-props) args))
+                                    (throw (IllegalArgumentException. (str "Argument vector for multi-prop observer " mname " must contain property names:" args)))))))
+
+                            (when (m (keyword mname))
+                              (throw (IllegalArgumentException. (str "Function " mname " in protocol " name " was redefined. Specify all arities in single definition."))))
+                            (assoc m (keyword mname)
+                                   (merge name-meta
+                                          {:value default-val
+                                           ;; :raw s
+                                           :flags flags}
+                                          {:name (vary-meta mname assoc :doc doc :observer observer)
+                                           :observer (first observer)
+                                           :doc doc}))))
+                        {} sigs)) ;; end reduce1
+        _ (println "SIGS: " sigs)
+        ;; meths (mapcat (fn [sig]
+        ;;                 (let [m (munge (:name sig))]
+        ;;                   (map #(vector m (vec (repeat (dec (count %))'Object)) 'Object)
+        ;;                        (:observer sig))))
+        ;;               (vals sigs))
+        ;; _ (println "METHS: " meths)
+        ]
+    (println "DEFPROPS A")
+  `(do
+     (defonce ~name {})
+     ;; (gen-interface :name ~iname :methods ~meths)
+     (alter-meta! (var ~name) assoc :doc ~(:doc opts))
+     ~(when sigs
+        `(#'assert-same-protocol (var ~name) '~(map :name (vals sigs))))
+     (println "DEFPROPS VAR: " (var ~name))
+     (println "DEFPROPS OPTS: " '~opts)
+     (println "DEFPROPS SIGS: " (str '~sigs))
+     (alter-var-root (var ~name)
+                     merge
+                     (assoc ~opts
+                       :props '~sigs
+                       :var (var ~name)
+                       ;; :method-map
+                       ;;   ~(and (:on opts)
+                       ;;         (apply hash-map
+                       ;;                (mapcat
+                       ;;                 (fn [s]
+                       ;;                   [(keyword (:name s)) (keyword (or (:on s) (:name s)))])
+                       ;;                 (vals sigs))))
+                       ;; :method-builders
+                       ;;  ~(apply hash-map
+                       ;;          (mapcat
+                       ;;           (fn [s]
+                       ;;             [`(intern *ns* (with-meta '~(:name s) (merge '~s {:protocol (var ~name)})))
+                       ;;              #_(emit-method-builder (:on-interface opts) (:name s) (:on s) (:observer s))])
+                       ;;           (vals sigs)))
+                        ))
+    ;; (println "DEFPROPS X")
+    ;;  (-reset-methods ~name)
+    (println "DEFPROPS Y")
+     '~name)))
+
+(defmacro defproperties
+  [name & opts+sigs]
+  (println "DEFPROPERTIES: " name opts+sigs)
+  (try (emit-properties name opts+sigs)
+       (catch Exception e
+         (throw (IllegalArgumentException. (str "defproperties " name ": " (.getMessage e)))))))
+
+(def cljkey->jskey
+  {:notify "notify"
+   :reflect "reflectToAttribute"
+   :read-only "readOnly"})
+
+(def cljtype->jstype
+  {'Boolean 'js/Boolean
+   'Date 'js/Date
+   'Number 'js/Number
+   'String 'js/String
+   'Vector 'js/Array
+   'Map 'js/Object})
+
+(declare props->cljs)
+
+(defmacro compile-cljs
+  [o]
+  (println "COMPILE-CLJS: " o (type o))
+  (let [v (resolve o)
+        nm (:name (meta v))
+        namesp (:ns (meta v))
+        ns-name (ns-name namesp)
+        uri (str "tmp/" (var->cljsfilename v))
+        cljs (str "(ns " namesp "." nm ")\n\n"
+                  (eval `(props->cljs ~o)))]
+    (println "URI: " (io/as-file uri))
+    (io/make-parents uri)
+    (spit (io/as-file uri) cljs)))
+
+;; s (if (= (first mode) :pprint)
+;;             (do (println "pprint")
+;;                 (with-out-str (pprint doc)))
+;;             (serialize doc))]
+;;     (spit file s)))
+
+(defn props->cljs
+  [propmap]
+  (if (not (:props propmap))
+    (throw (IllegalArgumentException. (str "props->cljs arg must be a Properties map"))))
+  (let [props (:props propmap)
+        prop-keys (keys (:props propmap))]
+    (println (str (:on propmap) ": " prop-keys))
+    (str "(clj->js\n"
+         (pr-str ;(merge
+                  {:properties (into {}
+                   (for [prop-key prop-keys]
+                     (let [prop (get props prop-key)
+                           descriptors (keys prop)
+                           typeval (merge {:type (cljtype->jstype (:type prop))}
+                                          (if (= 'String (:type prop))
+                                            (if (nil? (:value prop))
+                                              {}
+                                              (if (empty? (:value prop))
+                                                {:value "\"\""}
+                                                {:value (:value prop)}))
+                                            (if (not (nil? (:value prop)))
+                                              {:value (:value prop)}
+                                              {})))
+                           ;; flags (for [flag (:flags prop)]
+                           ;;         (str (cljkey->jskey flag) ": true"))]
+                           ]
+                       ;; (println "procesing property: " (pr-str prop))
+                       ;; (println "descriptors: " descriptors)
+                       {(keyword (:name prop)) typeval})))})
+         ")")))
+
+         ;; (str/join ",\n" (for [prop-key prop-keys]
+         ;;                   (let [prop (get props prop-key)
+         ;;                         descriptors (keys prop)
+         ;;                         typeval (remove empty? [(str "type: " (:type prop))
+         ;;                                                 (if (= 'String (:type prop))
+         ;;                                                   (if (nil? (:value prop))
+         ;;                                                     '()
+         ;;                                                     (if (empty? (:value prop))
+         ;;                                                       (str "value: \"\"")
+         ;;                                                       (str "value: \"" (:value prop) "\"")))
+         ;;                                                   (if (not (nil? (:value prop)))
+         ;;                                                     (str "value: " (:value prop))
+         ;;                                                     '()))])
+         ;;                         flags (for [flag (:flags prop)]
+         ;;                                 (str (cljkey->jskey flag) ": true"))]
+         ;;                     (println "procesing property: " (pr-str prop))
+         ;;                     (println "descriptors: " descriptors)
+         ;;                     (str (name (:name prop)) ": {\n\t"
+         ;;                          (str/join ",\n\t"
+         ;;                                    (concat typeval
+         ;;                                            flags))
+         ;;                          "\n}"))))
+
+
+(defmacro makepolymer
+  [nm docstr & args]
+  (println "makepolymer: " nm docstr args))
+
+(defmacro defpolymer
+  [nm & args]
+  (println "DEFPOLYMER: " nm args)
+  (let [docstr (if (string? (first args)) (first args) "")
+        args (if (string? (first args)) (rest args) args)]
+    (println "defpolymer: " nm docstr args)))
 
 ;; we need co-syntax for co-application (observation)
 ;; Alternatives:

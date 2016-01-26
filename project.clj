@@ -2,7 +2,9 @@
   :description "HTML5/Polymer in Clojure"
   :url "https://github.com/mobileink/miraj.markup"
   :source-paths ["src/main/clj"]
-  :dependencies [[org.clojure/clojure "1.8.0-RC4"]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/data.json "0.2.6"]
+                 [clj-time "0.11.0"]
                  [org.clojure/clojurescript "1.7.228"]]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
                    :source-paths ["src/main/clj"] ;; "src/test/clj" "dev"]
