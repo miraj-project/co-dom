@@ -8,9 +8,9 @@
                  [org.clojure/clojurescript "1.7.228"]]
   :profiles {:dev {:prep-tasks ^:replace ["clean" "compile"]
                    :source-paths ["src/main/clj"] ;; "src/test/clj" "dev"]
-                   :dependencies [[polymer/paper "1.2.3-SNAPSHOT"]
-                                  [polymer/iron "1.2.3-SNAPSHOT"]
-                                  [polymer/behaviors "1.2.3-SNAPSHOT"]
+                   :dependencies [[miraj/paper "1.2.3-SNAPSHOT"]
+                                  [miraj/iron "1.2.3-SNAPSHOT"]
+                                  ;; [polymer/behaviors "1.2.3-SNAPSHOT"]
                                   [miraj/html "5.1.0-SNAPSHOT"]
                                   [org.clojure/tools.namespace "0.2.1"]
                                   [org.clojure/tools.logging "0.3.1"]
@@ -22,7 +22,7 @@
                                   [ clj-logging-config "1.9.7"]]}
              :test {:resource-paths ["test/resources"]
                     :dependencies [[miraj "1.1.4-SNAPSHOT"]
-                                   [polymer/paper "1.2.3-SNAPSHOT"]
+                                   [miraj/paper "1.2.3-SNAPSHOT"]
                                    [miraj/html "5.1.0-SNAPSHOT"]]}}
   :repl-options {:port 4001}
   :test-selectors {:attrs :attrs
