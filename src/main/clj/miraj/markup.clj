@@ -31,7 +31,8 @@
            [javax.xml.transform OutputKeys TransformerFactory]
            [javax.xml.transform.stream StreamSource StreamResult]
            [java.nio.charset Charset]
-           [java.io Reader]))
+           [java.io Reader]
+           [miraj NSException]))
 ;;           [java.util Date]))
 
 ;; (println "loading miraj/markup.clj")
@@ -94,7 +95,8 @@
         ]
     (symbol (str ns-name "." nm))))
 
-(defmacro interface-sym->protocol-sym
+;;MIGRATED
+#_(defmacro interface-sym->protocol-sym
   "Protocol names cannot contain '.'"
   [sym]
   ;; (println "interface-sym->protocol-sym: " sym)
@@ -768,7 +770,7 @@
     ;; (println "serializing to" @mode ": " args)
     (let [doc-str (cond
                     (= @mode :html)
-                    (do ;(log/trace "emitting HTML: " args)
+                    (do ;(log/trace "emitting HTML:" args)
                       ;; (if (= :html (:tag (first args)))
                       ;;   (.write string-writer "<!DOCTYPE html>"))
                       (apply serialize-impl elts))
@@ -1474,7 +1476,7 @@
 
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
+  ;; (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))]
     (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :component true})
             (fn [& args]
@@ -1787,6 +1789,11 @@
         content (str/join ", " [width initial-scale min-scale max-scale user-scalable])]
     (element :meta {:name "viewport" :content content})))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  handle HTML meta elements
+;;  http://w3c.github.io/html/document-metadata.html#the-meta-element
+;; TODO: migrate to separate miraj.html/meta library, like miraj.html/pragma
+
 (defn apply-meta-rule
   [tag key val ruleset]
   ;; (println (str "APPLY META RULE: " tag " | " key " | " val " | " ruleset))
@@ -1924,6 +1931,9 @@
     (element :meta {:name (kw->nm k)
                     :content (str v)})))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 
+
 (defn normalize
   "inspect args, if necessary create <head> etc."
   [& args]
@@ -1959,6 +1969,8 @@
 (def polymer-nss #{"iron" "paper" "google" "gold" "neon" "platinum" "font" "molecules"})
 
 (defn get-href
+  "Given pfx and sfx (e.g. 'paper' and 'input'), generate the href
+  value needed to load polymer component."
   ([pfx sfx]
    (println "get-href: " pfx " - " sfx (type sfx))
    (let [pfx (str/split (str pfx) #"\.")
@@ -2005,6 +2017,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmulti get-resource-elt
+  "Returns e.g. <link rel='import' href='foo/bar/baz.html'>"
   (fn [typ nsp sym spec]
     ;; (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
     typ))
@@ -2062,6 +2075,7 @@
 ;;   (element :script {:src (deref (find-var sym))}))
 
 (defn require-resource
+  "Implements handling of :require clauses in html expressions."
   [spec]
   ;; (println (str "REQUIRE-RESOURCE: " spec))
   ;; at this point, the ns has been required, but not the fns
@@ -2070,174 +2084,105 @@
         ;; _ (println "ns sym: " ns-sym)
         ns-obj (find-ns ns-sym)
         ;; _ (println "ns obj: " ns-obj)
-        ;; _ (println "ns obj map?: " (map? ns-obj))
-        ;; _ (println "ns meta: " (meta ns-obj))
-        pfx-sym (symbol (str ns-sym) "pfx")
-        ;; _ (println "ns pfx-sym: " pfx-sym)
-        pfx-var  (resolve pfx-sym)
-        ;; _ (println "ns pfx-var: " pfx-var)
-        pfx (if pfx-var (deref pfx-var) "") ;;(throw (Exception. (str "Resource " pfx-sym " not found."))))
-        ;; _ (println "ns pfx val: " (pr-str pfx))
         options (apply hash-map (rest spec))
         as-opt (:as options)
         ;; _ (println ":as " as-opt)
         refer-syms (doall (:refer options))
         ;; _ (println ":refer " refer-syms)
-        resource-type (:resource-type (meta ns-obj))
-        ;; _ (println "RESOURCE-TYPE: " resource-type)
         ]
 
-    (if (= :polymer resource-type)
-      (do
-        (if as-opt
-          (do (println "ALIASING 1: " as-opt (type as-opt) ns-sym (type ns-sym))
-              (clojure.core/alias as-opt ns-sym)
-              (println "aliases for " *ns* ": " (ns-aliases *ns*))))
-        (cond
-          (nil? refer-syms)
-          (let [uri ;;(get-href ns-sym)
-                (str ns-sym)
-                #_(str/replace (str ns-sym) #"\." "/")]
-            ;;(if verify? (verify-resource uri spec))
-            (element :link {:rel "import" :href uri}))
+    (if as-opt
+      (do ;; (println "ALIASING 1: " as-opt (type as-opt) ns-sym (type ns-sym))
+          (clojure.core/alias as-opt ns-sym)
+          #_(println "aliases for " *ns* ": " (ns-aliases *ns*))))
+    (cond
+      (nil? refer-syms)
+      (let [uri ;;(get-href ns-sym)
+            (str ns-sym)
+            #_(str/replace (str ns-sym) #"\." "/")]
+        ;;(if verify? (verify-resource uri spec))
+        (element :link {:rel "import" :href uri}))
 
-          ;; (= :all refer-syms)
-          ;; iterate over everything in the ns map
+      ;; (= :all refer-syms)
+      ;; iterate over everything in the ns map
 
-          :else
-          ;; at this point, the ns has been required
-          ;; we just need to get the metadata for the sym
-          (do ;;(println "FOR [REF " refer-syms "]")
-            (for [ref refer-syms]
-              (let [ref-sym (symbol (str ns-sym) (str ref))
-                    _ (println "\tREF: " ref)
-                    _ (println "\trefsym: " ref-sym)
-                    _ (println "\trefsym meta:")
-                    _ (pp/pprint (meta (find-var ref-sym)))
-                    ref-var (find-var ref-sym)]
-                (if ref-var
-                  (do ;;(println "ref-var: " ref-var)
-                    ;; (println "ref-var meta: " (meta ref-var))
-                    (if (bound? ref-var)
-                      (if (:component (meta ref-var))
-                        (let [uri (:uri (meta ref-var))]
-                          ;; FIXME: this verify doesn't work with user-defined components
-                          ;; (if verify? (verify-resource uri spec))
-                          (element :link {:rel "import" :href uri}))
-                        (throw (Exception. (str "var " ref-var " not a component"))))
-                      (throw (Exception. (str "ref-var " ref-var " not bound")))))
-                  (let [;;_ (println "var for sym: " ref-sym " not found in ns; searching map")
-                        ns-map-sym (symbol (str ns-sym) (str ns-sym))
-                        ;; _ (println "ns-map-sym: " ns-map-sym)
-                        ns-map-var (resolve ns-map-sym)
-                        ;; _ (println "ns-map-var: " ns-map-var)
-                        ns-map (if ns-map-var
-                                 (deref ns-map-var)
-                                 (throw (Exception. (str "Symbol '" ref-sym "' unresolvable"))))
-                        ;; _ (println "ns-map val: " ns-map)
-
-                        ref-kw (keyword ref)
-                        ;; _ (println "ref kw:" ref-kw)
-                        elt-spec (get ns-map ref-kw)
-                        ;; _ (println "elt-spec: " (pr-str elt-spec))
-                        elt-kw (first elt-spec)
-                        ;; _ (println "elt-kw: " elt-kw)
-                        uri (str pfx "/" (second elt-spec))
-                        ;; _ (println "link href: " uri)
-                        ]
-                    (if (nil? elt-kw) (throw (Exception. (str "definition for '" ref-sym "' not found"))))
-                    ;; step 2
-                    ;;(html-constructor ns-sym ref elt-kw uri)
-                    ;; (println "*NS* " *ns*)
-                    ;; step 3
-                    #_(if verify? (verify-resource uri spec))
-                    (element :link {:rel "import" :href uri})))))))))))
+      :else
+      ;; at this point, the ns has been required
+      ;; we just need to get the metadata for the sym
+      (for [ref refer-syms]
+        (let [ref-sym (symbol (str ns-sym) (str ref))
+              ;; _ (println "REF: " ref-sym)
+              ref-var (if-let [v (find-var ref-sym)]
+                        v (throw (Exception. "var not found for config sym: " ref-sym)))
+              ref-val (deref ref-var)]
+          (if ref-val
+            (if-let [uri (:uri (meta ref-var))]
+              (do
+                ;; FIXME: this verify doesn't work with user-defined components
+                ;; (if verify? (verify-resource uri spec))
+                (element :link {:rel "import" :href uri}))
+              (throw (Exception. (str ":uri key expected in: " ref-var))))
+            (throw (Exception. (str "ref-var " ref-var " not bound")))))))))
+        ;; #_(if verify? (verify-resource uri spec))
+        ;;       (element :link {:rel "import" :href uri}))))))))
 ;; (get-resource-elt ns-type ns-obj ref-sym comp)))))))
 
 (defn resolve-require-refs
   [spec]
-  (println (str "RESOLVE-REQUIRE-REFS: " spec))
+  ;; (println (str "RESOLVE-REQUIRE-REFS: " spec))
   ;; at this point, the ns has been required, but not the fns
   ;; tasks:  1. create the fns based on :refer; 2. generate the <link> elts
   (let [ns-sym (first spec)
-        _ (println "ns sym: " ns-sym)
+        ;; _ (println "ns sym: " ns-sym)
         ns-obj (find-ns ns-sym)
-        _ (println "ns obj: " ns-obj)
-        _ (println "ns obj map?: " (map? ns-obj))
-        _ (println "ns meta: " (meta ns-obj))
-        pfx-sym (symbol (str ns-sym) "pfx")
-        _ (println "ns pfx-sym: " pfx-sym)
-        pfx-var  (resolve pfx-sym)
-        _ (println "ns pfx-var: " pfx-var)
-        pfx (if pfx-var (deref pfx-var) "") ;;(throw (Exception. (str "Resource " pfx-sym " not found."))))
-        _ (println "ns pfx val: " (pr-str pfx))
+        ;; _ (println "ns obj: " ns-obj)
         options (apply hash-map (rest spec))
         as-opt (:as options)
-        _ (println ":as " as-opt)
+        ;; _ (println ":as " as-opt)
         refer-syms (doall (:refer options))
-        _ (println ":refer " refer-syms)
-        resource-type (:resource-type (meta ns-obj))
-        _ (println "RESOURCE-TYPE: " resource-type)
+        ;; _ (println ":refer " refer-syms)
         ]
-    (println "LET FINISHED")
-    (if (= :polymer resource-type)
-      (do
-        (if as-opt
-          (do (println "ALIASING 2: " *ns* ": " as-opt ns-sym)
-              (alias as-opt ns-sym)
-              #_(println "aliases for " *ns* ": " (ns-aliases *ns*))))
-        (doseq [[isym# ivar#] (ns-interns ns-sym)] (println "INTERNED: " isym# ivar#))
-        (cond
-          (nil? refer-syms)
-          nil
-          ;; (= :all refer-syms)
-          ;; iterate over everything in the ns map
+    (if as-opt
+      (do ;; (println "ALIASING 2: " *ns* ": " as-opt ns-sym)
+          (alias as-opt ns-sym)
+          #_(println "aliases for " *ns* ": " (ns-aliases *ns*))))
+    ;; (doseq [[isym# ivar#] (ns-interns ns-sym)] (println "INTERNED: " isym# ivar#))
+    (cond
+      (nil? refer-syms)
+      nil
 
-          :else
-          (do
-            (println "FOR [REF " refer-syms "]")
-            (doall
-             (for [ref refer-syms]
-               (let [ref-sym (symbol (str ns-sym) (str ref))
-                     _ (println "\tREF: " ref)
-                     _ (println "\trefsym: " ref-sym)
-                     _ (println "\trefsym meta:")
-                     _ (pp/pprint (meta (find-var ref-sym)))
-                     ref-var (find-var ref-sym)
-                 ;; (if ref-var
-                 ;;   (do (println "ref-var: " ref-var)
-                 ;;       (println "ref-var meta: " (meta ref-var))
-                 ;;       (if (bound? ref-var)
-                 ;;         (do (println "VAR IS BOUND: " ref-var)
-                 ;;             (if (not (:component (meta ref-var)))
-                 ;;               ;; (let [ref-nm (-> (meta ref-var) :name)]
-                 ;;               ;;   (html-constructor ns-sym ref-nm ref-nm
-                 ;;               ;;                     (-> (meta ref-var) :uri))
-                 ;;               (throw (Exception. (str "var " ref-var " not a component"))))
-                 ;;             (throw (Exception. (str "ref-var " ref-var " not bound")))))
-                 ;;   (let [_ (println "var for sym: " ref-sym " not found in ns; searching map")
-                     ns-map-sym (symbol (str ns-sym) "components")
-                     _ (println "ns-map-sym: " ns-map-sym)
-                     ns-map-var (resolve ns-map-sym)
-                     _ (println "ns-map-var: " ns-map-var)
-                     ns-map (if ns-map-var
-                              (deref ns-map-var)
-                              (throw (Exception. (str "Symbol '" ref-sym "' unresolvable"))))
-                     ;; _ (println "ns-map val: " ns-map)
+      (= :all refer-syms)
+      nil ;; iterate over everything in the ns map
 
-                     ref-kw (keyword ref)
-                     ;; _ (println "ref kw:" ref-kw)
-                     elt-spec (get ns-map ref-kw)
-                     ;; _ (println "elt-spec: " (pr-str elt-spec))
-                     elt-kw (first elt-spec)
-                     ;; _ (println "elt-kw: " elt-kw)
-                     uri (str pfx "/" (second elt-spec))
-                     ;; _ (println "link href: " uri)
-                     ]
-                 (if (nil? elt-kw) (throw (Exception. (str "definition for '" ref-sym "' not found"))))
-                    ;; step 2
-                 (html-constructor ns-sym ref elt-kw uri)
-                 (println "interned: " (ns-resolve ns-sym ref)))))))))))
+      :else
+      (doall
+       (for [ref refer-syms]
+         (let [ref-sym (symbol (str ns-sym) (str ref))
+               ;; _ (println "REF: " ref)
+               ;; _ (println "\trefsym: " ref-sym)
+               ref-var (find-var ref-sym)
+               ;; _ (println "ref-var: " ref-var)
+               ;; ;; config map must be named "components"
+               ;; ns-map-sym (symbol (str ns-sym) "components")
+               ;; _ (println "ns-map-sym: " ns-map-sym)
+               ;; ns-map-var (resolve ns-map-sym)
+               ;; _ (println "ns-map-var: " ns-map-var)
+               ;; ns-map (if ns-map-var
+               ;;          (deref ns-map-var)
+               ;;          (throw (NSException. (str "Config map '" ns-map-var "' unresolvable"))))
+               ;; ;; _ (println "ns-map val: " ns-map)
+
+               ref-val (if-let [v (deref ref-var)]
+                         v (throw (Exception. (str "unbound config var: " ref-var))))
+               ;; _ (println "ref-val: " ref-val)
+               ref-kw (:kw ref-val)
+               uri (:uri ref-val)
+               ;; _ (println "link href: " uri)
+               ]
+           (if (nil? ref-kw) (throw (Exception. (str "HTML tag (kw) for '" ref-sym "' not found"))))
+           ;; step 2
+           (html-constructor ns-sym ref ref-kw uri)
+           #_(println "interned: " (ns-resolve ns-sym ref))))))))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
 (defmacro require
@@ -2249,34 +2194,38 @@
   ;; step 1: clojure.core/require the namespaces, without options
   (doseq [arg args]
     ;;HACK TODO: validate
-    (println "COMPILING REQUIRE")
+    ;; (println "COMPILING REQUIRE")
     (eval
      (macroexpand
       `(let [ns-basic# (first ~arg)]
-         (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
-         (clojure.core/require ns-basic# :reload)
+         ;; (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
+         (try (clojure.core/require ns-basic# :reload)
+              (catch java.io.FileNotFoundException e#
+                (throw (NSException.
+                        (str "miraj.markup/require ns undefined: " (.getMessage e#))))))
          ;; (doseq [[isym# ivar#] (ns-interns ns-basic#)] (println "INTERNED: " isym# ivar#))
          ;; (doseq [[isym# ivar#] (ns-aliases ns-basic#)] (println "ALIAS: " isym# ivar#))
          ;; make sure file actually has ns decl
          (if (find-ns ns-basic#) nil (throw (Exception. (str "ns not declared: " ns-basic#))))
+
          ;; make sure components map is defined
-         (if (not (ns-resolve ns-basic# (symbol "components")))
-           (throw (Exception. (str "components map not defined in : " ns-basic#))))
-  ;; step 2: resolve the referenced syms and generate html element fns
+         ;; (if (not (ns-resolve ns-basic# (symbol "components")))
+         ;;   (throw (Exception. (str "components map not defined in : " ns-basic#))))
+         ;; step 2: resolve the referenced syms and generate html element fns
          (resolve-require-refs ~arg)))))
 
   ;; step 3: for each :refer, generate a <link> element
   ;; require-resource does both
-  (println "EXPANDING REQUIRE")
+  ;; (println "EXPANDING REQUIRE")
   `(do
-     (println "REQUIRing: " [~@args])
+     ;; (println "REQUIRing: " [~@args])
      (let [link-elts# (for [arg# [~@args]]
                         (do ;;(println "GET-REQ: " arg#)
                           (let [r# (require-resource arg#)]
                             (doall r#)
                             r#)))]
        (doall link-elts#)
-       (println "REQUIREd: " link-elts#)
+       ;; (println "REQUIREd: " link-elts#)
                           link-elts#)))
 
            ;;   (element :foo))))))
@@ -2327,9 +2276,9 @@
                     style-ref (if-let [sref (find-var style-sym)]
                                 (deref sref)
                                 (throw (Exception. (str "CSS resource '" style-sym "' not found; referenced by 'import' spec: " spec))))
-                    ;; _ (println "style ref: " style-ref)
+                    _ (println "style ref: " style-ref)
                     uri (:uri style-ref)
-                    ;; _ (println "uri: " uri)
+                    _ (println "uri: " uri)
 
                     ;; iores (if-let [res (io/resource uri)]
                     ;;         res (throw (Exception. (str "CSS resource '" uri "' not found in classpath; referenced by 'import' spec: " spec))))
@@ -2470,20 +2419,26 @@
 
 (defn get-import
   [import]
-  ;; (println (str "get-import: " import))
-  ;; (println (str "ns: " (first import) " " (type (first import))))
-  (let [nsp (first import)]
-    (clojure.core/require nsp)
-    (let [import-ns (find-ns nsp)
-          resource-type (:resource-type (meta import-ns))
-          ;; (println "import ns: " nsp (meta import-ns))
-          ;; (println "import resource type: " resource-type)
-          result (import-resource resource-type import)]
-      ;; (doall result)
-      ;; (println "get-import RESULT: " result)
+  (println (str "get-import: " import))
+  (println (str "ns: " (first import) " " (type (first import))))
+  (let [ns (first import)]
+    (clojure.core/require ns)
+    (let [import-ns (if-let [n (find-ns ns)] n (throw (Exception. (str "import ns not found: " ns))))
+          refs (rest import)
+          _ (println "REFS: " refs (type refs))
+          result (for [ref refs]
+                   (do (println "REF: " ref)
+                       (let [ref-var (resolve (symbol (str ns) (str ref)))
+                             ref-val (deref ref-var)]
+                       (import-resource (:type ref-val) import))))]
+      (doall result)
+      (println "get-import RESULT: " result)
       result)))
 
 (defmacro import
+  "Handle :import clauses in html expressions. Used to generate HTML
+  'head' elements responsible for loading non-component resources like
+  stylesheets, images, etc."
   [& args]
   (println "IMPORT: " args)
   (let [args (if (= :verify (first args))
@@ -2511,6 +2466,9 @@
   ;; (println "meta-map: " m)
   (get-metas m))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  miraj-specific elements
+
 (defmacro codom
   [nm & args]
   (println "CODOM: " (str nm)) ;; " ARGS: " args)
@@ -2518,7 +2476,8 @@
        (let [tree# (apply element :CODOM_56477342333109 {:id ~(str nm)} (list ~@args))]
          (xsl-xform xsl-normalize-codom tree#))))
 
-(defmacro def-codom
+;;MIGRATED
+#_(defmacro def-codom
   [nm & args]
   ;; (println "DEF-CODOM: " (str nm)) ;; " ARGS: " args)
   (let [ns-sym *ns* ; (ns-name *ns*)
@@ -2551,11 +2510,17 @@
                  ;;                 (apply element elt-kw attrs content)))]
                  ;;     elt)))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Polymer-specific translations: generate javascript from embedded Clojurescript
+;;
+;;  TODO:  migrate to separate miraj.html/polymer library
+;;
 (def polymer-prop-descriptors
   {:type "type", :value "value", :notify "notify", :read-only "readOnly",
    :reflect-to-attribute "reflectToAttribute", :observer "observer", :computed "computed"})
 
 (defn construct-properties-js
+  "Translate props to Polymer property expressions"
   [props]
   (str "properties: {\n\t    "
        (str/join ",\n\t    "
@@ -2582,7 +2547,8 @@
                 [(keyword (gensym (str "_" (first method))))
                  (apply list 'fn (rest method))])})))
 
-(defn normalize-rawmethods
+;;MIGRATED
+#_(defn normalize-rawmethods
   [methods]
   ;; (println "NORMALIZE-RAWMETHODS")
   (into {} (for [method methods]
@@ -2651,7 +2617,8 @@
                                              ms)})
                       result)))))})))
 
-(defn protos->rawmethods
+;;MIGRATED
+#_(defn protos->rawmethods
   [protos]
   (let [ls (filter (fn [p] (and (symbol? p)
                                 (:co-protocol?
@@ -2960,15 +2927,17 @@
     ;; (println "PROPS: " props-str)
     (element :script ctor-str)))
 
+;;MIGRATED
 ;; from clojure/core_deftype.clj
-(defn- parse-opts [s]
+#_(defn- parse-opts [s]
   ;; (println "parse-opts: " s)
   (loop [opts {} [k v & rs :as s] s]
     (if (keyword? k)
       (recur (assoc opts k v) rs)
       [opts s])))
 
-(defn- parse-impls [specs]
+;;MIGRATED
+#_(defn- parse-impls [specs]
   ;; (println "PARSE-IMPLS: " specs)
   (loop [ret {} s specs]
     (if (seq s)
@@ -3084,7 +3053,8 @@
         (element :link {:rel "import" :href uri})
         (element :link {:rel "import" :href (str proto)})))))
 
-(defn- behaviors->elements [opts+specs]
+;;MIGRATED
+#_(defn- behaviors->elements [opts+specs]
   "emit elements for protos"
   ;; (println "behaviors->elements: " opts+specs)
   (let [[opts specs] (parse-opts opts+specs)
@@ -3218,7 +3188,8 @@
       ;;   (element :link {:rel "import"
       ;;                   :href uri}))))))
 
-(defn- parse-cotype-args
+;;MIGRATED
+#_(defn- parse-cotype-args
   [args]
   ;; (println "PARSE COTYPE ARGS: " (pr-str args))
   (let [[docstr args] (if (string? (first args))
@@ -3245,7 +3216,8 @@
         ]
     [docstr args codom protos]))
 
-(defn- props->propmap
+;;MIGRATED
+#_(defn- props->propmap
   [args]
   ;; (println "PROPS->PROPMAP: " args)
   (let [props (filter (fn [x] (and (symbol? x)
@@ -3391,7 +3363,9 @@
                  (merge old new))
                {:miraj {:prototype cljs}})))
 
-(defmacro defcomponent
+;;MIGRATED
+#_(defmacro defcomponent
+  "Define a web component (Polymer flavor)"
   [nm & args]
   ;; (println "COMPONENT: " (str nm)) ;; " ARGS: " args)
   (if (not (str/includes? nm "-")) (throw (IllegalArgumentException.
