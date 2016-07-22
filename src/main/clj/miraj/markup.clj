@@ -45,84 +45,6 @@
 (defn pprint-str [m]
   (let [w (StringWriter.)] (pp/pprint m w)(.toString w)))
 
-(defn ns->uri [n] (str/replace n #"\." "/"))
-
-(defn var->path [v]
-  ;; (println "var->path: " v)
-  (let [nm (:name (meta v))
-        namesp (:ns (meta v))
-        ;; _ (println "namesp: " namesp)
-        ns-name (ns-name namesp)
-        ;; _ (println "ns-name: " ns-name)
-        path (str/replace ns-name #"-|\." {"-" "_" "." "/"})
-        ;; _ (println "path: " path)
-        fn (str/replace nm #"-|\." {"-" "_" "." "/"})
-        ;; _ (println "fn: " fn)
-        ]
-    (str path "/" fn)))
-
-(defn sym->cljs-ns
-  [sym]
-  ;; (println "sym->cljs-ns: " sym)
-  (let [v (resolve sym)
-        nm (:name (meta v))
-        ;; _ (println "nm: " nm)
-        namesp (:ns (meta v))
-        ;; _ (println "namesp: " namesp)
-        ns-name (ns-name namesp)
-        ]
-    (symbol (str ns-name "." nm))))
-
-(defn var->cljs-ns
-  [v]
-  ;; (println "var->cljs-ns: " v)
-  (let [nm (:name (meta v))
-        ;; _ (println "nm: " nm)
-        namesp (:ns (meta v))
-        ;; _ (println "namesp: " namesp)
-        ns-name (ns-name namesp)
-        ]
-    (symbol (str ns-name "." nm))))
-
-(defn var->sym
-  [v]
-  ;; (println "var->sym: " v)
-  (let [nm (:name (meta v))
-        ;; _ (println "nm: " nm)
-        namesp (:ns (meta v))
-        ;; _ (println "namesp: " namesp)
-        ns-name (ns-name namesp)
-        ]
-    (symbol (str ns-name "." nm))))
-
-;;MIGRATED
-#_(defmacro interface-sym->protocol-sym
-  "Protocol names cannot contain '.'"
-  [sym]
-  ;; (println "interface-sym->protocol-sym: " sym)
-  `(if (var? (resolve ~sym))
-     (symbol (str (->> (resolve ~sym) meta :ns))
-            (str (->> (resolve ~sym) meta :name)))
-     (let [nodes# (str/split (str ~sym) #"\.")
-           ns# (str/join "." (drop-last nodes#))
-           ;; _# (println "ns: " ns#)
-           nm# (last nodes#)
-           newsym# (symbol (str ns#) (str nm#))]
-       ;; (println "interface-sym->protocol-sym: " ~sym " => " newsym#)
-       newsym#)))
-
-(def cljkey->jskey
-  {:notify :notify
-   :reflect :reflectToAttribute
-   :read-only :readOnly})
-
-(def cljtype->jstype
-  {'Boolean 'js/Boolean
-   'Date 'js/Date
-   'Number 'js/Number
-   'String 'js/String
-   'Vector 'js/Array
-   'Map 'js/Object})
 
 (def html5-void-elts
   #{"area" "base" "br" "col"
@@ -1038,7 +960,7 @@
   ;; (println "ELEMENT: TAG: " tag " ATTRS: " attrs " CONTENT: " content)
   (let [[attribs contents] (parse-elt-args (or attrs {}) (or content '()))
         ;; _ (println "ATTRIBS: " attribs)
-        ;; _ (println "CONTENT: " content)
+        ;; _ (println "ELEMENT CONTENT: " content)
         e (Element. tag (or attribs {}) (or contents '()))]
         ;; e (if (= (type attrs) miraj.markup.Element)
         ;;     (Element. tag {} (remove nil? (apply list attrs content)))
@@ -1336,6 +1258,9 @@
     (.toString sw)))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; begining of miraj customization
+
 #_(defn make-fns
   [tags]
   (log/trace "make-fns " tags) ;; (type tags))
@@ -1477,18 +1402,21 @@
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
   ;; (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
-  (let [ds (if (empty? docstring) "" (first docstring))]
-    (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :component true})
-            (fn [& args]
-              (let [elt (if (empty? args)
-                          (do (println "COMPONENT FN NO ARGS: " elt-kw)
-                              (element elt-kw))
-                           (let [first (first args)
-                                 rest (rest args)
-                                 [attrs content] (parse-elt-args first rest)]
-                             (apply element elt-kw attrs content)))]
-                elt)))
-                ns-sym))
+  (let [ds (if (empty? docstring) "" (first docstring))
+        newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :component true})
+                       (fn [& args]
+                         (let [elt (if (empty? args)
+                                     (do (println "COMPONENT FN NO ARGS: " elt-kw)
+                                         (element elt-kw))
+                                     (let [first (first args)
+                                           rest (rest args)
+                                           [attrs content] (parse-elt-args first rest)]
+                                       (apply element elt-kw attrs content)))]
+                           elt)))]
+    ;; (println "NS-SYM: " ns-sym)
+    ;; (println "NM-SYM: " nm-sym)
+    ;; (println "VAR: " newvar)
+    newvar))
   ;; (alter-meta! (find-var ns-sym nm-sym)
   ;;              (fn [old new]
   ;;                (merge old new))
@@ -1550,39 +1478,6 @@
                                      :elt-uri elt-uri}})
               #_(println "var: " (find-var (symbol (str *ns*) (str fn-tag))))))))
 
-(defmacro co-fn
-  [fn-tag docstring elt-kw elt-uri typ]
-  (do #_(println "co-fn:" typ fn-tag elt-kw elt-uri docstring)
-              (eval `(defn ~fn-tag ~docstring
-                       [& args#]
-;;                       (println "invoking " ~fn-tag)
-                       (let [elt# (if (empty? args#)
-                                    (with-meta (element ~elt-kw)
-                                      {:miraj
-                                       {:co-fn true
-                                        :component ~typ
-                                        :doc ~docstring
-                                        :elt-kw ~elt-kw
-                                        :elt-uri ~elt-uri}})
-                                    (let [first# (first args#)
-                                          rest# (rest args#)
-                                          [attrs# content#] (parse-elt-args first# rest#)]
-                                      (with-meta (apply element ~elt-kw attrs# content#)
-                                        {:miraj {:co-fn true
-                                                 :component ~typ
-                                                 :doc ~docstring
-                                                 :elt-kw ~elt-kw
-                                                 :elt-uri ~elt-uri}})))]
-                         elt#)))
-              (alter-meta! (find-var (symbol (str *ns*) (str fn-tag)))
-                            (fn [old new]
-                              (merge old new))
-                            {:miraj {:co-fn true
-                                     :component typ
-                                     :doc docstring
-                                     :elt-kw elt-kw
-                                     :elt-uri elt-uri}})))
-
 (defn optimize-js
   [doc]
   ;; (println "JS optimizer: " doc)
@@ -1615,22 +1510,6 @@
 ;;    (println "Unrecognized optimizer: " strategy)))
 
 (declare <<!)
-
-(defn build-component
-  [[html-output-dir cljs-output-dir]
-   [csym cvar]]
-  ;; [^clojure.lang.Symbol component & mode]
-  ;; [file doc & mode]
-  (println "Building component: " csym cvar)
-  ;; (println "codom: " (-> cvar meta :miraj :codom))
-  ;; (println "Output dirs: " html-output-dir cljs-output-dir)
-  (let [path (str/replace (str (:ns (meta cvar))) #"\." "/")
-        hfile (str/join "/" [html-output-dir path (str csym ".html")])
-        cfile (str/join "/" [cljs-output-dir path (str csym ".cljs")])]
-    (io/make-parents hfile)
-    (io/make-parents cfile)
-    (spit hfile (with-out-str (pprint (-> cvar meta :miraj :codom))))
-    (spit cfile (-> cvar meta :miraj :prototype))))
 
   ;; (let [s (if (= (first mode) :pprint)
   ;;           (do (println "pprint")
@@ -1792,6 +1671,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  handle HTML meta elements
 ;;  http://w3c.github.io/html/document-metadata.html#the-meta-element
+
 ;; TODO: migrate to separate miraj.html/meta library, like miraj.html/pragma
 
 (defn apply-meta-rule
@@ -1935,27 +1815,44 @@
 ;; 
 
 (defn normalize
-  "inspect args, if necessary create <head> etc."
-  [& args]
-  ;; (println "normalize HTML args: " args)
-  ;; (println "normalize HTML meta: " (apply meta args))
+  "inspect webpage var, if necessary create <head> etc."
+  [page-var]
+  ;; (println "normalize HTML page-var: " page-var)
+  ;; (println "normalize HTML meta: " (meta page-var))
   (reset! mode :html)
-  (let [meta-elts (get-metas (dissoc (apply meta args) :elt-kw :elt-uri :co-fn))
+  ;; remove miraj-specific meta fields
+  (let [meta-elts (get-metas (dissoc (meta page-var)
+                                     :doc :name :ns :_webpage :_webimports :_webcomponents))
         ;; _ (println "META-ELTS: " meta-elts)
-        h (list
-           (update (first args)
-                   :content
-                   (fn [content]
-                     (if meta-elts
-                       (concat meta-elts content)
-                       content))))
-        ;; _ (println "H: " h)
-        normh (apply xsl-xform xsl-normalize h)
+        page-content (deref page-var)
+        ;; _ (println "PAGE CONTENT: " page-content)
+        header (first (->> page-content :content (filter #(= (:tag %) :head))))
+        ;; _ (println "HEADER CONTENT: " header)
+        body (first (->> page-content :content (filter #(= (:tag %) :body))))
+        ;; _ (println "BODY CONTENT: " body)
+        newheader (apply element :head {} (vec (flatten (list meta-elts (:content header)))))
+        ;; _ (println "NEW HEADER: " newheader)
+        normed (element :html newheader body)
+        ;; h (list
+        ;;    (update (first page-var)
+        ;;            :content
+        ;;            (fn [content]
+        ;;              (if meta-elts
+        ;;                (concat meta-elts content)
+        ;;                content))))
+        ;; ;; _ (println "H: " h)
+        normh (xsl-xform xsl-normalize page-content)
         ]
-    normh))
+  normed))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  require/import
+
+;;FIXME: migrate to:
+;;
+;;      miraj/core/require.clj
+;;      miraj/core/import.clj
+
 (defn verify-resource
   [uri spec]
   (println "verify-resource: " uri spec)
@@ -2016,20 +1913,20 @@
       (str (str/join "/" pfx) "/" sfx)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmulti get-resource-elt
+#_(defmulti get-resource-elt
   "Returns e.g. <link rel='import' href='foo/bar/baz.html'>"
   (fn [typ nsp sym spec]
     ;; (println (str "GET-RESOURCE-elt: " typ " " nsp " " sym))
     typ))
 
-(defmethod get-resource-elt :default
+#_(defmethod get-resource-elt :default
   [typ nsp sym spec]
   ;; (println (str "get-resource-elt :default: " typ " " nsp " " sym))
   (throw (Exception. (str "Unrecognized resource type for require: " spec))))
   ;; (element :link
   ;;          {:rel "import" :href (get-href (ns-name nsp) ref)}))
 
-(defmethod get-resource-elt :polymer
+#_(defmethod get-resource-elt :polymer
   [typ nsp sym spec]
   (println "GET-RESOURCE-ELT polymer: NS: " nsp " SYM: " sym)
   (println "spec: " spec)
@@ -2053,7 +1950,7 @@
 
   ;; (get-href (ns-name nsp) ref)}))
 
-(defmethod get-resource-elt :link
+#_(defmethod get-resource-elt :link
   [typ nsp sym spec]
   (println "GET-RESOURCE-ELT :link: " (str typ " " nsp " " sym))
   (element :link
@@ -2074,7 +1971,7 @@
 ;;   ;; (println "get-resource-elt :js: " (str typ " " nsp " " sym))
 ;;   (element :script {:src (deref (find-var sym))}))
 
-(defn require-resource
+#_(defn require-resource
   "Implements handling of :require clauses in html expressions."
   [spec]
   ;; (println (str "REQUIRE-RESOURCE: " spec))
@@ -2158,10 +2055,10 @@
       (doall
        (for [ref refer-syms]
          (let [ref-sym (symbol (str ns-sym) (str ref))
-               ;; _ (println "REF: " ref)
-               ;; _ (println "\trefsym: " ref-sym)
+               _ (println "REF: " ref)
+               _ (println "\trefsym: " ref-sym)
                ref-var (find-var ref-sym)
-               ;; _ (println "ref-var: " ref-var)
+               _ (println "ref-var: " ref-var)
                ;; ;; config map must be named "components"
                ;; ns-map-sym (symbol (str ns-sym) "components")
                ;; _ (println "ns-map-sym: " ns-map-sym)
@@ -2174,7 +2071,8 @@
 
                ref-val (if-let [v (deref ref-var)]
                          v (throw (Exception. (str "unbound config var: " ref-var))))
-               ;; _ (println "ref-val: " ref-val)
+               _ (println "ref-val: " ref-val)
+               _ (println "evaled: " (ref-val))
                ref-kw (:kw ref-val)
                uri (:uri ref-val)
                ;; _ (println "link href: " uri)
@@ -2185,49 +2083,6 @@
            #_(println "interned: " (ns-resolve ns-sym ref))))))))
 
 ;; (require [[polymer.paper :as paper :refer [button card]]])
-(defmacro require
-  "1. clojure.core/require the ns  2. generate the <link> elts
-  NB: for clojure.core/require to work the :refer items must be def'd in the ns
-  so to support jit loading we need to require first w/o :refer, then define the :refers,
-  then alias as needed"
-  [& args]
-  ;; step 1: clojure.core/require the namespaces, without options
-  (doseq [arg args]
-    ;;HACK TODO: validate
-    ;; (println "COMPILING REQUIRE")
-    (eval
-     (macroexpand
-      `(let [ns-basic# (first ~arg)]
-         ;; (println "CLOJURE.CORE/REQUIRE: " ns-basic#)
-         (try (clojure.core/require ns-basic# :reload)
-              (catch java.io.FileNotFoundException e#
-                (throw (NSException.
-                        (str "miraj.markup/require ns undefined: " (.getMessage e#))))))
-         ;; (doseq [[isym# ivar#] (ns-interns ns-basic#)] (println "INTERNED: " isym# ivar#))
-         ;; (doseq [[isym# ivar#] (ns-aliases ns-basic#)] (println "ALIAS: " isym# ivar#))
-         ;; make sure file actually has ns decl
-         (if (find-ns ns-basic#) nil (throw (Exception. (str "ns not declared: " ns-basic#))))
-
-         ;; make sure components map is defined
-         ;; (if (not (ns-resolve ns-basic# (symbol "components")))
-         ;;   (throw (Exception. (str "components map not defined in : " ns-basic#))))
-         ;; step 2: resolve the referenced syms and generate html element fns
-         (resolve-require-refs ~arg)))))
-
-  ;; step 3: for each :refer, generate a <link> element
-  ;; require-resource does both
-  ;; (println "EXPANDING REQUIRE")
-  `(do
-     ;; (println "REQUIRing: " [~@args])
-     (let [link-elts# (for [arg# [~@args]]
-                        (do ;;(println "GET-REQ: " arg#)
-                          (let [r# (require-resource arg#)]
-                            (doall r#)
-                            r#)))]
-       (doall link-elts#)
-       ;; (println "REQUIREd: " link-elts#)
-                          link-elts#)))
-
            ;;   (element :foo))))))
 
 ;;             (first r#))))))
@@ -2244,6 +2099,8 @@
   ;;       (flatten (require-resource arg#))))))
 
 ;;;;;;;;;;;;;;;;  importing
+
+;;FIXME: migrate to miraj/core/import.clj ?
 
 (defmulti import-resource
   (fn [typ spec]
@@ -2469,376 +2326,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  miraj-specific elements
 
-(defmacro codom
+#_(defmacro codom
   [nm & args]
   (println "CODOM: " (str nm)) ;; " ARGS: " args)
   `(do ;;(println "codom: " ~(str nm) ~@args)
        (let [tree# (apply element :CODOM_56477342333109 {:id ~(str nm)} (list ~@args))]
          (xsl-xform xsl-normalize-codom tree#))))
 
-;;MIGRATED
-#_(defmacro def-codom
-  [nm & args]
-  ;; (println "DEF-CODOM: " (str nm)) ;; " ARGS: " args)
-  (let [ns-sym *ns* ; (ns-name *ns*)
-        nm-sym (symbol (name nm))
-        [docstr args] (if (string? (first args))
-                        [(first args) (rest args)]
-                        ["" args])
-        [argvec args] [(first args) (rest args)]]
-    ;; (println "    NS: " (pr-str ns-sym))
-    ;; (println "    NM_SYM: " (pr-str nm-sym))
-    ;; (println "    DOCSTR: " (pr-str docstr))
-    ;; (println "    DOCSTR: " (pr-str docstr))
-    ;; (println "    ARGVEC: " (pr-str argvec))
-    ;; (println "    ARGS: " (pr-str args))
-  `(do ;;(println "codom: " ~(str nm) ~@args)
-       (let [tree# (apply element ;;~(keyword nm)
-                          :CODOM_56477342333109
-                          {:id ~(str nm)} (list ~@args))
-             codom# (xsl-xform xsl-normalize-codom tree#)]
-         (intern *ns* (with-meta (symbol ~(str nm-sym)) {:doc ~docstr :codom true})
-                 codom#)
-         codom#))))
-
-                 ;; (fn [& args#]
-                 ;;   (let [elt (if (empty? args#)
-                 ;;               (element elt-kw)
-                 ;;               (let [first (first args)
-                 ;;                     rest (rest args)
-                 ;;                     [attrs content] (parse-elt-args first rest)]
-                 ;;                 (apply element elt-kw attrs content)))]
-                 ;;     elt)))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Polymer-specific translations: generate javascript from embedded Clojurescript
-;;
-;;  TODO:  migrate to separate miraj.html/polymer library
-;;
-(def polymer-prop-descriptors
-  {:type "type", :value "value", :notify "notify", :read-only "readOnly",
-   :reflect-to-attribute "reflectToAttribute", :observer "observer", :computed "computed"})
-
-(defn construct-properties-js
-  "Translate props to Polymer property expressions"
-  [props]
-  (str "properties: {\n\t    "
-       (str/join ",\n\t    "
-                 (for [prop props]
-                   (str prop ": {"
-                        (str/join ", " (for [[k v] (meta prop)]
-                                         (let [nm (get polymer-prop-descriptors k)]
-                                           (if nm
-                                             (str nm ": " (pr-str v))
-                                             (throw (Exception. (str "Invalid property descriptor: " k)))))))
-                        "}")))
-       "\n\t  }"))
-
-(defn normalize-methods
-  [methods]
-  ;; (println "NORMALIZE-METHODS")
-  (into {} (for [method methods]
-             {(if (= 'with-element (first method))
-                (keyword (str (name (-> method next first)) "." (-> method nnext first first)))
-                (keyword (first method)))
-              (if (= 'with-element (first method))
-                [(keyword (gensym (str "_" (name (-> method next first)) "." (-> method nnext first first))))
-                 (apply list 'fn (-> method nnext first next))]
-                [(keyword (gensym (str "_" (first method))))
-                 (apply list 'fn (rest method))])})))
-
-;;MIGRATED
-#_(defn normalize-rawmethods
-  [methods]
-  ;; (println "NORMALIZE-RAWMETHODS")
-  (into {} (for [method methods]
-             {(if (= 'with-element (first method))
-                (keyword (str (name (-> method next first)) "." (-> method nnext first first)))
-                (keyword (first method)))
-              (if (= 'with-element (first method))
-                [(keyword (str (name (-> method next first)) "." (-> method nnext first first)))
-                 (apply list 'fn (-> method nnext first next))]
-                [(keyword (str (first method)))
-                 (apply list 'fn (rest method))])})))
-
-(defn protos->rawbehaviors
-  [protos]
-  (let [ls (filter (fn [p] (and (symbol? p)
-                                (= :polymer-behaviors
-                                   (:resource-type
-                                    (meta (resolve (interface-sym->protocol-sym p)))))))
-                   protos)]
-    ;; (println "FILTERED BEHAVIORS: " ls)
-    (if (seq ls)
-      {:behaviors
-       (loop [proto (first protos)
-                       tail (rest protos)
-                       result {}]
-         (if (nil? proto)
-           result
-           (let [proto (interface-sym->protocol-sym proto)
-                 ;; _ (println "BEH META: " (meta (resolve proto)))
-                 resource-type (:resource-type (meta (resolve proto)))
-                 resource-name (:resource-name (meta (resolve proto)))
-                 methods (take-while seq? tail)
-                 next-proto (drop-while seq? tail)]
-             (recur (first next-proto)
-                    (next next-proto)
-                    (if (= :polymer-behaviors resource-type)
-                      (merge result {resource-name (let [ms (normalize-methods methods)]
-                                                     ;; (println "NORMED BEHS: " ms)
-                                                     ms)})
-                      result)))))})))
-
-(defn protos->rawlisteners
-  [protos]
-  (let [ls (filter (fn [p] (and (symbol? p)
-                                (= :polymer-events
-                                   (:resource-type
-                                    (meta (resolve (interface-sym->protocol-sym p)))))))
-                   protos)]
-    ;; (println "FILTERED LISTENERS: " ls)
-    (if (seq ls)
-      {:listeners
-       (loop [proto (first protos)
-                       tail (rest protos)
-                       result {}]
-         (if (nil? proto)
-           result
-           (let [proto (interface-sym->protocol-sym proto)
-                 resource-type (:resource-type (meta (resolve proto)))
-                 methods (take-while seq? tail)
-                 next-proto (drop-while seq? tail)]
-             (recur (first next-proto)
-                    (next next-proto)
-                    (if (= :polymer-events resource-type)
-                      (merge result {proto (let [ms (normalize-methods methods)]
-                                             ;; (println "NORMED LISTENERS: " ms)
-                                             ms)})
-                      result)))))})))
-
-;;MIGRATED
-#_(defn protos->rawmethods
-  [protos]
-  (let [ls (filter (fn [p] (and (symbol? p)
-                                (:co-protocol?
-                                 (meta (resolve (interface-sym->protocol-sym p))))))
-                   protos)]
-    ;; (println "FILTERED METHODS: " ls)
-    (if (seq ls)
-      (let [ms {:methods
-                (loop [proto (first protos)
-                       tail (rest protos)
-                       result {}]
-                  (if (nil? proto)
-                    result
-                    (let [proto (interface-sym->protocol-sym proto)
-                          resource-type (:resource-type (meta (resolve proto)))
-                          methods (take-while seq? tail)
-                          next-proto (drop-while seq? tail)]
-                      (recur (first next-proto)
-                             (next next-proto)
-                             (if (:co-protocol? (meta (resolve proto)))
-                               (merge result {proto (let [ms (normalize-rawmethods methods)]
-                                                      ;; (println "NORMED METHS: " ms)
-                                                      ms)})
-                               result)))))}]
-        ;; (println "METHODS X: " ms)
-        ms))))
-
-(defn protos->behaviorvec
-  [protos]
-  ;; (println "PROTOS->BEHAVIORVEC: " protos)
-  (let [ls (filter (fn [p] (and (symbol? p)
-                                (= :polymer-behaviors
-                                   (:resource-type
-                                    (meta (resolve (interface-sym->protocol-sym p)))))))
-                   protos)]
-    ;; (println "FILTERED BEHAVIORS: " ls)
-    (if (seq ls)
-      {:listeners
-       (into []
-                     ;;(doall
-                     (loop [proto (first protos)
-                            tail (rest protos)
-                            result ""]
-                       (if (nil? proto)
-                         result
-                         (let [proto (interface-sym->protocol-sym proto)
-                               resource-type (:resource-type (meta (resolve proto)))]
-                           ;; (println "LISTENER PROTO: " proto)
-                           ;; (println "LISTENER TYPE: " resource-type)
-                           ;; (println "LISTENER TAIL: " tail)
-                           ;; (println "LISTENER RESULT: " result)
-                           (let [methods (take-while seq? tail)
-                                 next-proto (drop-while seq? tail)]
-                             (println "LISTENER METHODS: " methods (type methods))
-                             (println "NEXT PROTO: " next-proto)
-                             (let [meths (for [method methods]
-                                           (let [_ (println "LISTENER METHOD: " method)
-                                                 evt (if (= 'with-element (first method))
-                                                       (str (name (first (next method))) "."
-                                                            (first (first (nnext method))))
-                                                       (first method))
-                                                 _ (println "LISTENER EVT: " evt)
-                                                 handler (str "_"
-                                                              (if (= 'with-element (first method))
-                                                                (str (name (first (next method))) "_"
-                                                                     (first (first (nnext method))))
-                                                                (first method)))
-                                                 _ (println "LISTENER HANDLER: " handler)
-                                                 ]
-                                             (str "'" evt "' : '" handler "'")))]
-                               (println "LISTENER METHS: " (doall meths))
-                               (recur (first next-proto)
-                                      (next next-proto)
-                                      (if (= :polymer-behaviors resource-type)
-                                        (concat result meths)
-                                        result))))))))
-           })))
-
-(defn construct-behaviors-js
-  [protocols]
-  ;; (println "CONSTRUCT-BEHAVIORS-JS: " protocols)
-  (let [protos (filter (fn [p] (if (not (seq? p))
-                                 (and
-                                  (not (seq? p))
-                                  (= :polymer-behaviors
-                                     (:resource-type
-                                      (meta (resolve (interface-sym->protocol-sym p))))))))
-                       protocols)]
-    (if (seq protos)
-      (str "behaviors: [\n\t    "
-           (str/join ",\n\t    "
-                     (for [proto protos #_(filter (fn [p]
-                                           (if (not (seq? p))
-                                             (and
-                                              (not (seq? p))
-                                              (= :polymer-behaviors
-                                                 (:resource-type
-                                                  (meta (resolve (interface-sym->protocol-sym p))))))))
-                                         protos)]
-                       (do
-                         (println "P META: " proto
-                                  (meta (resolve (interface-sym->protocol-sym proto))))
-
-                         (str (:resource-name (meta (resolve
-                                                     (interface-sym->protocol-sym proto))))))))
-           "\n\t  ]"))))
-
-;; clojurescript stuff, from david nolen's tutorial
-;; https://github.com/swannodette/hello-cljsc
-
-;; FIXME:  migrate the cljs compile stuff to another namespace
-;; ;; A simple helper to emit ClojureScript compiled to JavaScript
-;; ;; as a string.
-;; #_(defn emit-str [ast]
-;;   (with-out-str (c/emit ast)))
-
-;; ;; A simple helper which allows us to read ClojureScript source from a string
-;; ;; instead of having to bother with files.
-;; (defn string-reader [s]
-;;   (clojure.lang.LineNumberingPushbackReader. (java.io.StringReader. s)))
-
-;; ;; A simple helper that takes a stream and returns a lazy sequences of
-;; ;; read forms.
-;; (defn forms-seq [stream]
-;;   (let [rdr (readers/indexing-push-back-reader stream 1)
-;;         forms-seq* (fn forms-seq* []
-;;                       (lazy-seq
-;;                         (if-let [form (reader/read rdr nil nil)]
-;;                           (cons form (forms-seq*)))))]
-;;     (forms-seq*)))
-
-;; ;; First we need to setup a basic analyzer environment.
-;; (def user-env '{:ns {:name cljs.user} :locals {}})
-
-;; (defn read1 [str]
-;;   (first (forms-seq (string-reader str))))
-
-;; (read1 "[1 :a 3]")
-;; (let [form (read1 "[:a :b]")]
-;;   (with-out-str (c/emit (ana/analyze user-env form))))
-
-;; (def cenv (atom {}))
-
-;; (let [form (read1 "[:a :b]")]
-;;   (binding [ana/*cljs-static-fns* true]
-;;     (emit-str
-;;       (env/with-compiler-env cenv
-;;         (ana/analyze user-env form)))))
-
-;; (let [form (read1 "js# [:a :b])")]
-;;   (cc/optimize {:optimizations :simple}
-;;     (emit-str (ana/analyze user-env form))))
-
-;; (defn cljs-compile
-;;   [method]
-;;   (println "CLJS-COMPILE: " method (type method))
-;;   (let [pgm (cc/optimize {:optimizations :simple
-;;                           :pretty-print true}
-;;                          (emit-str (ana/analyze user-env method)))]
-;;     ;(println "CLJS PGM: " pgm)
-;;     pgm))
-
-;; (defn cljs-compile-str
-;;   [method]
-;;   (println "CLJS-COMPILE-STR: " method (type method))
-;;   (let [form (read1 method)]
-;;     (cc/optimize {:optimizations :advanced
-;;                   :pretty-print true}
-;;                  (emit-str (ana/analyze user-env form)))))
-
-(defn construct-listeners-js
-  [protos]
-  (println "CONSTRUCT-LISTENERS-JS: " protos)
-  (let [ls (filter (fn [p] (and (symbol? p)
-                                (= :polymer-events
-                                   (:resource-type
-                                    (meta (resolve (interface-sym->protocol-sym p)))))))
-                   protos)]
-    (println "FILTERED LISTENERS: " ls)
-    (if (seq ls)
-      (str "listeners: {\n\t    "
-           (str/join ",\n\t    "
-                     ;;(doall
-                     (loop [proto (first protos)
-                            tail (rest protos)
-                            result ""]
-                       (if (nil? proto)
-                         result
-                         (let [proto (interface-sym->protocol-sym proto)
-                               resource-type (:resource-type (meta (resolve proto)))]
-                           (println "LISTENER PROTO: " proto)
-                           (println "LISTENER TYPE: " resource-type)
-                           (println "LISTENER TAIL: " tail)
-                           (println "LISTENER RESULT: " result)
-                           (let [methods (take-while seq? tail)
-                                 next-proto (drop-while seq? tail)]
-                             (println "LISTENER METHODS: " methods (type methods))
-                             (println "NEXT PROTO: " next-proto)
-                             (let [meths (for [method methods]
-                                           (let [_ (println "LISTENER METHOD: " method)
-                                                 evt (if (= 'with-element (first method))
-                                                       (str (name (first (next method))) "."
-                                                            (first (first (nnext method))))
-                                                       (first method))
-                                                 _ (println "LISTENER EVT: " evt)
-                                                 handler (str "_"
-                                                              (if (= 'with-element (first method))
-                                                                (str (name (first (next method))) "_"
-                                                                     (first (first (nnext method))))
-                                                                (first method)))
-                                                 _ (println "LISTENER HANDLER: " handler)
-                                                 ]
-                                             (str "'" evt "' : '" handler "'")))]
-                               (println "LISTENER METHS: " (doall meths))
-                               (recur (first next-proto)
-                                      (next next-proto)
-                                      (if (= :polymer-events resource-type)
-                                        (concat result meths)
-                                        result))))))))
-           "\n\t  }"))))
 
 #_(defn construct-defns-js
   [protos]
@@ -2927,24 +2421,6 @@
     ;; (println "PROPS: " props-str)
     (element :script ctor-str)))
 
-;;MIGRATED
-;; from clojure/core_deftype.clj
-#_(defn- parse-opts [s]
-  ;; (println "parse-opts: " s)
-  (loop [opts {} [k v & rs :as s] s]
-    (if (keyword? k)
-      (recur (assoc opts k v) rs)
-      [opts s])))
-
-;;MIGRATED
-#_(defn- parse-impls [specs]
-  ;; (println "PARSE-IMPLS: " specs)
-  (loop [ret {} s specs]
-    (if (seq s)
-      (recur (assoc ret (first s) (take-while seq? (next s)))
-             (drop-while seq? (next s)))
-      ret)))
-
 (defn ^{:private true}
   maybe-destructured
   [params body]
@@ -2963,726 +2439,6 @@
         `(~new-params
           (let ~lets
             ~@body))))))
-
-(defn coprotocol?
-  [maybe-p]
-  (:co-protocol? (meta (resolve maybe-p))))
-
-(defn protocol?
-  [maybe-p]
-  (boolean (:on-interface maybe-p)))
-
-(defn- ->protomap [opts+specs]
-  "emit elements for protos"
-  (println "->protomap: " opts+specs)
-  (let [[opts specs] (parse-opts opts+specs)
-        _ (println "OPTS: " opts)
-        _ (println "SPECS: " specs)
-        impls (parse-impls (first specs))
-        _ (println "IMPLS: " impls (count impls))
-        sigs (into {} (map (fn [arg]
-                             (let [_ (println "PSYM: " (first arg))
-                                   psym (interface-sym->protocol-sym (first arg))
-                                   psym-var (resolve psym)]
-                               (if (nil? psym-var)
-                                 (if (not= 'This (first arg))
-                                   (throw (Exception. (str "Symbol " psym " unresolvable")))))
-                               [psym (if (= 'This (first arg))
-                                       '()
-                                       (:sigs (deref psym-var)))]))
-                           impls))
-        _ (println "SIGS: " sigs)
-        ;; we need URIs for behaviors
-        uris (into {} (map (fn [arg]
-                             (let [psym (first arg)]
-                               (println "PROTO: " psym)
-                               (println "PROTO var: " (resolve psym))
-                               (println "meta PROTO var: " (meta (resolve psym)))
-                               (println "PROTO resource-type: " (:resource-type (meta (resolve psym))))
-                               (if (= :polymer-behaviors
-                                      (:resource-type (meta (resolve psym))))
-                                 [psym (:uri (meta (resolve psym)))])))
-                           sigs))
-        _ (println "URIs: " uris)
-        interfaces (-> (map #(interface-sym->protocol-sym %) (keys impls))
-                       set
-                       (disj 'Object 'java.lang.Object)
-                       vec)
-        _ (println "INTERFACES: " interfaces)
-        _ (doseq [intf interfaces] (println "coprotocol? " intf (coprotocol? intf)))
-        ;; methods (map (fn [[name params & body]]
-        ;;                (cons name (maybe-destructured params body)))
-        ;;              (apply concat (vals impls)))
-        ;; _ (println "METHODS: " methods)
-        ]
-    (when-let [bad-opts (seq (remove #{:no-print :load-ns} (keys opts)))]
-      (throw (IllegalArgumentException. (apply print-str "Unsupported option(s) -" bad-opts))))
-    ;; (validate-impls impls)
-    (doseq [[k v] impls]
-      (let [proto (interface-sym->protocol-sym k)
-            sig (get sigs proto)]
-        (println "PARSING PROTOCOL: " sig)
-        (doseq [method-impl v]
-          (println "interface sym: " k)
-          (println "method-impl: " method-impl)
-          (let [method-kw (if (= 'with-element (first method-impl))
-                            (keyword (first (first (nnext method-impl))))
-                            (keyword (first method-impl)))
-                _ (println "method-kw: " method-kw)
-                method-sig (get sig method-kw)
-                method-impl (if (= 'with-element (first method-impl))
-                              (next (first (nnext method-impl)))
-                              method-impl)]
-            (println "method-impl: " method-impl)
-            (println "method-sig: " method-sig)
-            (if (nil? method-sig)
-              (if (not= 'This k)
-                (throw (Exception. (str "Method '" (first method-impl) "' "
-                                        "not declared in protocol '" proto "'"))))
-              ;; if arity not correct throw bad arity exception
-              ;; if fnext is fn, then fnext of next should be arg vector
-              ;;FIXME impl-arity
-              (let [impl-arity 1
-                    proto-arities (set (->> (:arglists method-sig)
-                                           (map count)))]
-                (println "PROT-ARITIES: " proto-arities)
-                #_(if (not-any? proto-arities [impl-arity])
-                    (throw (Exception. (str "Bad arity: " method-impl " v. " method-sig))))))))))
-    (for [[proto uri] uris]
-      (if uri
-        (element :link {:rel "import" :href uri})
-        (element :link {:rel "import" :href (str proto)})))))
-
-;;MIGRATED
-#_(defn- behaviors->elements [opts+specs]
-  "emit elements for protos"
-  ;; (println "behaviors->elements: " opts+specs)
-  (let [[opts specs] (parse-opts opts+specs)
-        ;; _ (println "OPTS: " opts)
-        ;; _ (println "SPECS: " specs)
-        impls (parse-impls (first specs))
-        ;; _ (println "IMPLS: " impls (count impls))
-        ;; obtain sig defns by resolving the protocol symbol
-        sigs (into {} (map (fn [arg]
-                             (let [;;_ (println "PSYM: " (first arg))
-                                   psym (interface-sym->protocol-sym (first arg))
-                                   psym-var (resolve psym)]
-                               (if (nil? psym-var)
-                                 (if (not= 'This (first arg))
-                                   (throw (Exception. (str "Symbol " psym " unresolvable")))))
-                               [psym (if (= 'This (first arg))
-                                       '()
-                                       (:sigs (deref psym-var)))]))
-                           impls))
-        ;; _ (println "SIGS: " sigs)
-        ;; we need URIs for behaviors
-        uris (into {} (map (fn [arg]
-                             (let [psym (first arg)]
-                               ;; (println "PROTO: " psym)
-                               ;; (println "PROTO var: " (resolve psym))
-                               ;; (println "meta PROTO var: " (meta (resolve psym)))
-                               ;; (println "PROTO resource-type: " (:resource-type (meta (resolve psym))))
-                               (if (= :polymer-behaviors
-                                      (:resource-type (meta (resolve psym))))
-                                 [psym (:uri (meta (resolve psym)))])))
-                           sigs))
-        ;; _ (println "URIs: " uris)
-        ;; interfaces (-> (map #(interface-sym->protocol-sym %) (keys impls))
-        ;;                set
-        ;;                (disj 'Object 'java.lang.Object)
-        ;;                vec)
-        ;; _ (println "INTERFACES: " interfaces)
-        ;; _ (doseq [intf interfaces] (println "coprotocol? " intf (coprotocol? intf)))
-        ;; methods (map (fn [[name params & body]]
-        ;;                (cons name (maybe-destructured params body)))
-        ;;              (apply concat (vals impls)))
-        ;; _ (println "METHODS: " methods)
-        ]
-    (when-let [bad-opts (seq (remove #{:no-print :load-ns} (keys opts)))]
-      (throw (IllegalArgumentException. (apply print-str "Unsupported option(s) -" bad-opts))))
-    ;; (validate-impls impls)
-    ;; (doseq [[k v] impls]
-    ;;   (let [proto (interface-sym->protocol-sym k)
-    ;;         sig (get sigs proto)]
-    ;;     (println "PARSING PROTOCOL: " sig)
-    ;;     (doseq [method-impl v]
-    ;;       (println "interface sym: " k)
-    ;;       (println "method-impl: " method-impl)
-    ;;       (let [method-kw (if (= 'with-element (first method-impl))
-    ;;                         (keyword (first (first (nnext method-impl))))
-    ;;                         (keyword (first method-impl)))
-    ;;             _ (println "method-kw: " method-kw)
-    ;;             method-sig (get sig method-kw)
-    ;;             method-impl (if (= 'with-element (first method-impl))
-    ;;                           (next (first (nnext method-impl)))
-    ;;                           method-impl)]
-    ;;         (println "method-impl: " method-impl)
-    ;;         (println "method-sig: " method-sig)
-    ;;         (if (nil? method-sig)
-    ;;           (if (not= 'This k)
-    ;;             (throw (Exception. (str "Method '" (first method-impl) "' "
-    ;;                                     "not declared in protocol '" proto "'"))))
-    ;;           ;; if arity not correct throw bad arity exception
-    ;;           ;; if fnext is fn, then fnext of next should be arg vector
-    ;;           ;;FIXME impl-arity
-    ;;           (let [impl-arity 1
-    ;;                 proto-arities (set (->> (:arglists method-sig)
-    ;;                                        (map count)))]
-    ;;             (println "PROT-ARITIES: " proto-arities)
-    ;;             #_(if (not-any? proto-arities [impl-arity])
-    ;;                 (throw (Exception. (str "Bad arity: " method-impl " v. " method-sig))))))))))
-    (for [[proto uri] uris]
-      (if uri
-        (element :link {:rel "import" :href uri})
-        (element :link {:rel "import" :href (str proto)})))))
-    ;; [interfaces methods opts]))
-
-;; (defn get-proto-codefsX
-;;   "proto names are actually js prototype names; polymer behaviors
-;;   lookup table is predefined in polymer.behaviors, user-defined behaviors must be configured in a namespace matching the proto name, e.g. MyBehaviors.HighlightBehavior is configured in MyBehaviors.clj"
-;;   [proto+mmaps]
-;;   (println "GET-PROTO-CODEFS: " proto+mmaps)
-;;   ;; (let [[interfaces methods opts] (behaviors->elements protos)]  ;;opts+specs)]
-;;   ;;   (println "INTERFACES: " interfaces)
-;;   ;;   (println "METHODS: " methods)
-;;   ;;   (println "OPTS: " opts)
-;;   (let [result (for [[proto mmap] (partition 2 proto+mmaps)]
-;;                  (let [_ (println "proto: " proto (var? proto) (class proto))
-;;                        proto-var (if (var? (try (resolve proto)
-;;                                                 (catch Exception e
-;;                                                   (throw (Exception.
-;;                                                           (str "Interface object for " proto " not found"))))))
-;;                                    (resolve proto)
-;;                                    (let [p (interface-sym->protocol-sym proto)]
-;;                                      (if (var? (resolve p))
-;;                                        (resolve p)
-;;                                        (throw (Exception. "FOO")))))
-;;                        _ (println "proto-var: " proto-var (var? proto-var) (protocol? proto-var))
-;;                        proto (deref proto-var)]
-;;                    (println "PROTOCOL: " proto-var (protocol? proto))
-;;                    (when-not (protocol? proto)
-;;                      (throw (IllegalArgumentException.
-;;                              (str proto " is not a protocol"))))
-;;                    (println "FOOBARBAASDFF")
-;;                    (str proto)))]
-;;     (doall result)
-;;     (println "RESULT: ")
-;;     result))
-
-(defn get-proto-codefs
-  "proto names are actually js prototype names; polymer behaviors
-  lookup table is predefined in polymer.behaviors, user-defined behaviors must be configured in a namespace matching the proto name, e.g. MyBehaviors.HighlightBehavior is configured in MyBehaviors.clj"
-  ;; NB: a co-def is a ref to def code, e.g. clojure :require clauses are co-defs
-  ;; here, <link> refs to impl code are polymer behavior (protocol) co-defs
-  ;; 1. verify protocols exist
-  ;; 2. validate method impl sigs
-  ;; 3. generate <link> markups
-  [opts+specs]
-  (println "GET-PROTO-CODEFS: " opts+specs)
-  (let [links (behaviors->elements opts+specs)]
-    ;;[interfaces methods opts] (behaviors->elements opts+specs)]
-    ;; (println "INTERFACES: " interfaces)
-    ;; (println "METHODS: " methods)
-    ;; (println "OPTS: " opts)
-    links))
-      ;;   (element :link {:rel "import"
-      ;;                   :href uri}))))))
-
-;;MIGRATED
-#_(defn- parse-cotype-args
-  [args]
-  ;; (println "PARSE COTYPE ARGS: " (pr-str args))
-  (let [[docstr args] (if (string? (first args))
-                        [(first args) (rest args)]
-                        ["" args])
-        codom (let [cd (filter (fn [x] (if (symbol? x)
-                                         (:codom (meta (resolve x))))) args)]
-                (if cd
-                  cd ;; else get the (codom ...) form
-                  ))
-        _ (if (> (count codom) 1) (throw (IllegalArgumentException. (str "Only one codom arg allowed"))))
-        props (let [props (filter (fn [x] (if (symbol? x)
-                                            (:properties (meta (resolve x))))) args)]
-                (if props
-                  props
-                  ))
-        ;; _ (println "PROPERTIES: " props)
-        ;; exclude docstring and codom
-        protos (filter (fn [x] (if (or (list? x)
-                                       (and (symbol? x)
-                                            (not (:codom (meta (resolve x))))))
-                                 x)) args)
-        ;; behaviors
-        ]
-    [docstr args codom protos]))
-
-;;MIGRATED
-#_(defn- props->propmap
-  [args]
-  ;; (println "PROPS->PROPMAP: " args)
-  (let [props (filter (fn [x] (and (symbol? x)
-                                       (:properties (meta (resolve x))))) args)]
-    ;; (println "PROPS: " props)
-    (if props
-      (let [properties (into {} (for [prop props]
-                                  (do ;; (println "PROP: " prop)
-                                      (let [pvar (resolve prop)
-                                            ;; _ (println "PVAR: " pvar)
-                                            ps (:props (deref pvar))
-                                            ;; _ (println "PS: " ps)
-                                            ]
-                                        ps))))
-            html-attrs (into {} (for [prop props]
-                                  (do ;; (println "HTMLATTRS PROP: " prop)
-                                      (let [pvar (resolve prop)
-                                            ;; _ (println "PVAR: " pvar)
-                                            html-attrs (:html-attrs (deref pvar))
-                                            ;; _ (println "HTMLATTRS: " html-attrs)
-                                            ]
-                                        html-attrs))))]
-        {:properties properties :html-attrs html-attrs}))))
-
-(defn props->cljs
-  [propmap]
-  ;; (println "PROPS->CLJS: " propmap)
-  ;; (if (not (:props propmap))
-  ;;   (throw (IllegalArgumentException. (str "props->cljs arg must be a Properties map"))))
-  (let [props (:properties propmap)
-        prop-keys (keys props)
-        html-attrs (:html-attrs propmap)]
-    ;; (println (str (:on propmap) ": " prop-keys))
-    {:hostAttributes html-attrs
-     :properties (into {}
-                       (for [prop-key prop-keys]
-                         (let [prop (get props prop-key)
-                               ;; _ (println "PROP: " prop)
-                               descriptors (keys prop)
-                               type+val (merge {:type (cljtype->jstype (:type prop))}
-                                               (if (= 'String (:type prop))
-                                                 (if (nil? (:value prop))
-                                                   {}
-                                                   (if (empty? (:value prop))
-                                                     {:value "\"\""}
-                                                     {:value (:value prop)}))
-                                                 (if (not (nil? (:value prop)))
-                                                   {:value (:value prop)}
-                                                   {})))
-                               flags (into {} (for [flag (:flags prop)]
-                                                [(cljkey->jskey flag) true]))
-                               ;; _ (println "FLAGS: " flags)
-                               ]
-                           ;; (println "procesing property: " (pr-str prop))
-                           ;; (println "descriptors: " descriptors)
-                           {(keyword (:name prop)) (merge type+val flags
-                                                          (if (:observer prop)
-                                                            {:observer (first (:observer prop))}))})))}))
-
-(defn listeners->cljs
-  [ls]
-  ;; (println "LISTENERS->CLJS: " (:listeners ls))
-  {:listeners
-   (into {}
-         (merge
-          (concat
-           (flatten (for [[evsuite listeners] (:listeners ls)]
-                      (do ;;(println "EVENT SUITE: " evsuite)
-                        (for [[ev listener] listeners]
-                          (do ;;(println "EV/LISTENER: " ev "/" listener)
-                            {ev (keyword (first listener))}
-                            ))))))))
-         })
-
-(defn methods->cljs
-  [ms]
-  ;; (println "METHODS->CLJS: " ms)
-  (let [observers (map #(:observer %)
-                       (filter #(:observer %) (vals (:properties ms))))
-        ;; _ (println "OBSERVERS: " observers)
-        ls (vals (reduce merge (vals (:listeners ms))))
-        ;; _ (println "LISTENER METHODS: " ls)
-        behs (vals (reduce merge (vals (:behaviors ms))))
-        ;; _ (println "BEH METHODS: " behs)
-        this-methods (vals (reduce merge (vals (:methods ms))))
-        ;; _ (println "THIS METHODS: " this-methods)
-        methods (concat observers ls behs this-methods)
-        ;; _ (println "METHODS: " methods)
-        ]
-    (into {} methods)))
-
-  ;; {:methods
-  ;;  (into {}
-  ;;        (merge
-  ;;         (concat
-  ;;          (flatten (for [[evsuite listeners] (:listeners ms)]
-  ;;                     (do ;;(println "EVENT SUITE: " evsuite)
-  ;;                       (for [[ev listener] listeners]
-  ;;                         (do ;;(println "EV/LISTENER: " ev "/" listener)
-  ;;                           {ev (keyword (first listener))}
-  ;;                           ))))))))
-  ;;        })
-
-(defn behaviors->cljs
-  [behs]
-  ;; (println "BEHAVIORS->CLJS: " (:behaviors behs))
-  (let [behaviors (keys  (:behaviors behs))]
-    {:behaviors (into [] (map keyword behaviors))}))
-
-(defn component->prototype
-  [cvar rawprops rawlisteners rawbehaviors rawmethods]
-  ;; (println "COMPONENT->PROTOTYPE: " cvar (type cvar))
-  ;; (println "RAWLISTENERS: " rawlisteners)
-  ;; (println "RAWMETHODS: " rawmethods)
-  ;; (println "RAWBEHAVIORS: " rawbehaviors)
-  (let [;; v (resolve nm)
-        ;; _ (println "component var: " cvar)
-        ;; _ (println "props: " props)
-        ;; namesp (:ns (meta cvar))
-        ;; ns-name (ns-name namesp)
-        uri (str "tmp/" (var->path cvar) ".cljs")
-        cljs-ns (var->cljs-ns cvar)
-        propmap (props->cljs rawprops)
-        listeners (listeners->cljs rawlisteners)
-        methmap (methods->cljs (merge rawprops rawlisteners rawbehaviors rawmethods))
-        ;; _ (println "METHODS MAP: " methmap)
-        behaviors (behaviors->cljs rawbehaviors)
-        cljs (str/join "\n" [(pprint-str (list 'ns cljs-ns))
-                             ;; (pprint-str '(enable-console-print!))
-                             (pprint-str (list 'js/Polymer
-                                               (list 'clj->js
-                                                     (merge {:is (keyword (:name (meta cvar)))}
-                                                            propmap
-                                                            listeners
-                                                            methmap
-                                                            behaviors))))])]
-    ;; (println "CLJS:\n" cljs)
-    ;; (println "URI: " uri)
-    ;; (io/make-parents uri)
-    ;; (spit uri cljs)
-    (alter-meta! cvar
-               (fn [old new]
-                 (merge old new))
-               {:miraj {:prototype cljs}})))
-
-;;MIGRATED
-#_(defmacro defcomponent
-  "Define a web component (Polymer flavor)"
-  [nm & args]
-  ;; (println "COMPONENT: " (str nm)) ;; " ARGS: " args)
-  (if (not (str/includes? nm "-")) (throw (IllegalArgumentException.
-                                           (str "Component name must contain at least one dash '-'."))))
-  ;; (println "COMPONENT ARGS: " (pr-str args))
-  (let [[docstr arglist codom & protos] (parse-cotype-args args)
-        ;; _ (println "DOCSTR: " (pr-str docstr))
-        ;; _ (println "ARGLIST: " (pr-str arglist))
-        ;; _ (println "COTYPE PROTOS: " protos (seq protos))
-        ;; _ (println "CODOM: " codom)
-        rawprops (props->propmap args)
-
-        rawmethods (apply protos->rawmethods protos)
-
-        rawbehaviors (apply protos->rawbehaviors protos)
-
-        rawlisteners (apply protos->rawlisteners protos)
-
-        ;; codom (drop 1 cod)
-        behavior-elts (behaviors->elements protos)
-        ;; _ (println (str "BEHAVIOR-ELTS: " (pr-str behavior-elts)))
-        ;; protomap (->protomap protos)
-        ;; _ (println "PROTOMAP: " protomap)
-
-        ;; js-ctor (js-constructor nm arglist protos)
-;;        js-ctor (element :script (str *ns* "." nm "()"))
-        ]
-    `(let [tree# ~@codom
-       ;; html-constructor interns the name, binding it to ->html fn
-           cvar# (html-constructor ~*ns* '~nm (keyword '~nm) (str (ns->uri ~*ns*) "/" '~nm))
-           _# (apply component->prototype cvar# '~rawprops '~rawlisteners '~rawbehaviors '~rawmethods)
-           ;; _# (println "PROTOTYPE: " (:prototype (:miraj (meta cvar#))))
-             ;; (if (instance? miraj.markup.Element ~(first codom))
-             ;;         ~@codom
-             ;;         (codom ~nm ~@codom))
-             content# (:content tree#)
-             result# (update tree#
-                            :content (fn [c#]
-                                       (let [dom# (last c#)
-                                             ;; _# (println "DOM#: " dom#)
-                                             newdom# (update dom#
-                                                             :attrs
-                                                             (fn [old-attrs#]
-                                                               (assoc old-attrs# :id (str '~nm))))
-                                             ;; newdom# (update newdom#
-                                             ;;                 :content (fn [domc#]
-                                             ;;                            (concat domc# [~js-ctor])))
-                                             ]
-                                         ;; (println "NEWDOM#: " newdom#)
-                                         (concat (butlast c#)
-                                                 [~@behavior-elts]
-                                                 #_[dom#]
-                                                 [newdom#]
-                                                 ))))
-             ;; var# (find-var (symbol (str ~*ns*) (str '~nm)))
-           ]
-         ;; (println "ALTERING META FOR " cvar#)
-         (alter-meta! cvar#
-                      (fn [old# new#]
-                        (do ;;(println "old#: " old#)
-                           ;;(println "new#: " new#)
-                            (merge old#
-                                   {:miraj (merge (:miraj old#)
-                                                  new#)})))
-                      {:component true
-                       :codom result#})
-         ;; (println "ALTERED META FOR " cvar#)
-         cvar#)))
-
-;; from clojure/core_deftype.clj
-;; reduce is defined again later after InternalReduce loads
-(defn ^:private ^:static
-  reduce1
-       ([f coll]
-             (let [s (seq coll)]
-               (if s
-         (reduce1 f (first s) (next s))
-                 (f))))
-       ([f val coll]
-          (let [s (seq coll)]
-            (if s
-              (if (chunked-seq? s)
-                (recur f
-                       (.reduce (chunk-first s) f val)
-                       (chunk-next s))
-                (recur f (f val (first s)) (next s)))
-         val))))
-
-(defn- assert-same-protocol [protocol-var method-syms]
-  (doseq [m method-syms]
-    (let [v (resolve m)
-          p (:protocol (meta v))]
-      (when (and v (bound? v) (not= protocol-var p))
-        (binding [*out* *err*]
-          (println "Warning: protocol" protocol-var "is overwriting"
-                   (if p
-                     (str "method " (.sym v) " of protocol " (.sym p))
-                     (str "function " (.sym v)))))))))
-
-(def property-types
-  {'Vector ^{:doc " (i.e. satisfy vector?)"} (fn [x] (vector? x))
-   'Map ^{:doc " (i.e. satisfy map?)"} (fn [x] (map? x))
-   'Boolean ^{:doc "  Allowed values are 'true' and 'false'."} (fn [x] (or (= 'true x) (= 'false x)))
-   'Date ^{:doc "[year month? day? hour? minute? second? millisecond?] (see clj-time) "} (fn [x]
-           (println "DATE ARG: " x (type x))
-           (and (vector? x)
-                (<= (count x) 7)
-                (not (empty? x))
-                (every? number? x)))
-   'Number number?
-   'String string?})
-
-(defn- emit-properties [name opts+sigs]
-  (let [iname (symbol (str (munge (namespace-munge *ns*)) "." (munge name)))
-        [opts sigs]
-        (loop [opts {:on (list 'quote iname)} sigs opts+sigs]
-          (condp #(%1 %2) (first sigs)
-            string? (recur (assoc opts :doc (first sigs)) (next sigs))
-            keyword? (recur (assoc opts (first sigs) (second sigs)) (nnext sigs))
-            [opts sigs]))
-        ;; _ (println "PRESIGS: " sigs)
-        html-attrs (first (filter map? sigs))
-        ;; _ (println "HTMLATTRS: " html-attrs)
-        sigs (filter list? sigs)
-        ;; _ (println "LIST PRESIGS: " sigs)
-        all-props (->> (map first (filter #(:tag (meta (first %))) sigs)))
-        ;; _ (println "all-props: " all-props)
-        sigs (when sigs
-               (reduce1 (fn [m s]
-                          ;; (println "REDUCE1 M: " m)
-                          ;; (println "REDUCE1 S: " s)
-                          (let [name-meta (meta (first s))
-                                ;; _ (println "name-meta: " name-meta)
-                                name-meta (dissoc (assoc name-meta :type (:tag name-meta))
-                                                              :tag)
-                                ;; _ (println "name-meta: " name-meta)
-                                doc (:doc name-meta)
-                                prop-type (if (some (set [(:type name-meta)])
-                                                    (set (keys property-types)))
-                                              (:type name-meta)
-                                              'Observer)
-                                ;; _ (println "prop-type: " prop-type)
-
-                                name-meta (if (= prop-type 'Observer)
-                                            (assoc name-meta :type 'Observer)
-                                            name-meta)
-                                ;; _ (println "name-meta: " name-meta)
-                                mname (with-meta (first s) nil)
-                                ;; _ (println "mname: " mname)
-
-                                _ (let [strs (filter string? s)]
-                                    ;; (println "STRINGS: " strs)
-                                    (if (= prop-type 'String)
-                                      (if (> (count strs) 1)
-                                              (throw (IllegalArgumentException.
-                                                      (str "Too many String args for property: " mname))))
-                                      (if (not= prop-type 'Observer)
-                                        (if (> (count strs) 0)
-                                          (throw (IllegalArgumentException.
-                                                  (str "Illegal String arg for property: " mname)))))))
-
-                                default-val (let [v (if (= :computed (first (rest s)))
-                                                      (if (fn? (eval (first (nnext s))))
-                                                        (do ;;(println "COMPUTED " (first (nnext s)))
-                                                            (first (nnext s)))
-                                                        (throw (IllegalArgumentException.
-                                                                (str "Computed value for "
-                                                                     mname
-                                                                     " must be a fn."))))
-                                                      (if (= prop-type 'Observer)
-                                                        nil
-                                                        (first (rest s))))]
-                                              #_(println "V: " v (fn? (eval v)))
-                                              (if (list? v) ;; a fn?
-                                                (if (= (first v) 'fn)
-                                                  (first (nnext v))
-                                                  v)
-                                                #_(throw (Exception. (str "don't understand " v))))
-                                              (if (= prop-type 'Date)
-                                                v
-                                                #_(.toString (apply t/date-time v))
-                                                v))
-                                ;; _ (println "default-val: " default-val (type default-val))
-                                _ (if (not= prop-type 'Observer)
-                                    (if (not (nil? default-val))
-                                      (let [pred (get property-types prop-type)]
-                                        ;; (println "pred: " pred)
-                                        (if (fn? (eval default-val))
-                                          (if (not (= :computed (first (rest s))))
-                                            (throw (IllegalArgumentException. (str "Default value "
-                                                                                   (pr-str default-val)
-                                                                                   " for "
-                                                                                   mname
-                                                                                   " must match type "
-                                                                                   prop-type
-                                                                                   ". "
-                                                                                   (:doc (meta pred))))))
-                                          (if (not (apply pred [default-val]))
-                                            (throw (IllegalArgumentException. (str "Default value "
-                                                                                   (pr-str default-val)
-                                                                                   " for "
-                                                                                   mname
-                                                                                   " must match type "
-                                                                                   prop-type
-                                                                                   ". "
-                                                                                   (:doc (meta pred))))))))))
-                                flags (filter keyword? s)
-                                ;; _ (println "flags: " flags)
-                                _  (if (some #{:computed} flags)
-                                     (if (not (= :computed (nth s 1)))
-                                       (throw (Exception. (str "Flag :computed must be first arg: "
-                                                               mname)))))
-                                observer (let [obs (if (some #{:computed} flags)
-                                                     (do ;;(println "COMPUTED HIT")
-                                                         (filter list? (next (nnext s))))
-                                                     (if (= prop-type 'Observer)
-                                                       (list (conj (rest s) 'fn))
-                                                       (filter list? s)))]
-                                           obs)
-                                ;; doc (let [ss (filter string? s)]
-                                ;;       (if (= 2 (count ss))
-                                ;;         (last ss)
-                                ;;         (if (= (first (next s)) (first ss)) nil (first ss))))
-                                ;; _ (println "observer: " observer) ; (-> (first observer) next first))
-                                ;; _ (println "doc: " doc)
-                                ]
-                            (when (> (count observer) 1)
-                              (throw (IllegalArgumentException. (str "Only one observer allowed for property " mname))))
-                            (if (not (empty? observer))
-                              (if (not= prop-type 'Observer)
-                                (let [argcount (count (-> (first observer) next first))]
-                                  (when (not= 2 argcount)
-                                    (throw (IllegalArgumentException.
-                                            (str "Definition of observer function for property "
-                                                 mname
-                                                 " must take exactly two args, for new and old vals, in that order.")))))))
-
-                            (cond
-                              (= prop-type 'Observer)
-                              (if (not (empty? flags))
-                                (throw (IllegalArgumentException. (str "Flags "
-                                                                       (pr-str flags)
-                                                                       " not allowed on multi-prop observer: " mname)))
-                                (let [args (fnext (first observer))]
-                                  ;; (println "OBSERVER ARGS: " args)
-                                  (if (empty? args)
-                                    (throw (IllegalArgumentException. (str "Argument vector for multi-prop observer " mname " must not be empty."))))
-                                  (if (not (every? (set all-props) args))
-                                    (throw (IllegalArgumentException. (str "Argument vector for multi-prop observer " mname " must contain property names:" args)))))))
-
-                            (when (m (keyword mname))
-                              (throw (IllegalArgumentException. (str "Function " mname " in protocol " name " was redefined. Specify all arities in single definition."))))
-
-
-                            (assoc m (keyword mname)
-                                   (merge name-meta
-                                          {:value default-val}
-                                           {:flags flags}
-                                           ;; :raw s
-                                          {:name (vary-meta mname assoc :doc doc :observer observer)}
-                                           (if (not (empty? observer))
-                                             {:observer [(keyword (gensym (str "_" mname)))
-                                                              (first observer)]})
-                                           (if (not (nil? doc))
-                                           {:doc doc})))))
-                        {} sigs)) ;; end reduce1
-
-        ;; _ (println "SIGS: " sigs)
-        ;; meths (mapcat (fn [sig]
-        ;;                 (let [m (munge (:name sig))]
-        ;;                   (map #(vector m (vec (repeat (dec (count %))'Object)) 'Object)
-        ;;                        (:observer sig))))
-        ;;               (vals sigs))
-        ;; _ (println "METHS: " meths)
-        ]
-    ;; (println "DEFPROPS A")
-  `(do
-     (defonce ~name {})
-     ;; (gen-interface :name ~iname :methods ~meths)
-     (alter-meta! (var ~name) assoc :doc ~(:doc opts) :properties true)
-     ~(when sigs
-        `(#'assert-same-protocol (var ~name) '~(map :name (vals sigs))))
-     ;; (println "DEFPROPS VAR: " (var ~name))
-     ;; (println "DEFPROPS OPTS: " '~opts)
-     ;; (println "DEFPROPS SIGS: " (str '~sigs))
-     (alter-var-root (var ~name)
-                     merge
-                     (assoc ~opts
-                            :html-attrs '~html-attrs
-                            :props '~sigs
-                            :var (var ~name)
-                       ;; :method-map
-                       ;;   ~(and (:on opts)
-                       ;;         (apply hash-map
-                       ;;                (mapcat
-                       ;;                 (fn [s]
-                       ;;                   [(keyword (:name s)) (keyword (or (:on s) (:name s)))])
-                       ;;                 (vals sigs))))
-                       ;; :method-builders
-                       ;;  ~(apply hash-map
-                       ;;          (mapcat
-                       ;;           (fn [s]
-                       ;;             [`(intern *ns* (with-meta '~(:name s) (merge '~s {:protocol (var ~name)})))
-                       ;;              #_(emit-method-builder (:on-interface opts) (:name s) (:on s) (:observer s))])
-                       ;;           (vals sigs)))
-                        ))
-    ;; (println "DEFPROPS X")
-    ;;  (-reset-methods ~name)
-    ;; (println "DEFPROPS " '~name)
-     '~name)))
-
-(defmacro defproperties
-  [name & opts+sigs]
-  ;; (println "DEFPROPERTIES: " name opts+sigs)
-  (try (emit-properties name opts+sigs)
-       (catch Exception e
-         (throw (IllegalArgumentException. (str "defproperties " name ": " (.getMessage e)))))))
 
 #_(defmacro compile-prototype
   [o]
