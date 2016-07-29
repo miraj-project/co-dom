@@ -1403,7 +1403,7 @@
   [ns-sym nm-sym elt-kw uri & docstring]
   ;; (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))
-        newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :component true})
+        newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds :uri uri :_webcomponent true})
                        (fn [& args]
                          (let [elt (if (empty? args)
                                      (do (println "COMPONENT FN NO ARGS: " elt-kw)
