@@ -19,3 +19,5 @@ E.g. so it supports HTML5 and possibly other markup/down languages.
 
 * resource validation: extend to support files located off of
   classpath
+
+etc
