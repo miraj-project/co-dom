@@ -1,12 +1,10 @@
-miraj.markup
-============
+= miraj.co-dom
 
-link:https://github.com/mobileink/miraj.markup/tree/miraj[miraj.markup]
+link:https://github.com/mobileink/miraj.co-dom/tree/miraj[miraj.co-dom]
 is designed to provide fully functional Clojure programming of
 link:http://www.w3.org/TR/html51/[HTML5.1] and
 link:https://www.polymer-project.org/1.0/[Polymer 1.x].
 
-* <<motivation,motivation>>
 * <<summary,summary>>
 ** <<companions,companion libraries>>
 * <<status,status>>
@@ -27,77 +25,14 @@ link:https://www.polymer-project.org/1.0/[Polymer 1.x].
 * <<bugs,bugs, comments, suggestions>>
 * <<license,license>>
 
-= [[motivation]] motivation
-
-Do we really need yet another HTML-in-Clojure library?  We already
-have link:https://github.com/weavejester/hiccup[Hiccup],
-link:https://hoplon.io/[Hoplon], and various template-based libraries;
-why another one?
-
-miraj.markup is the foundation layer of a more ambitious project to
-re-conceptualize web programming (and indeed computation) in a manner
-that integrates the traditional function-oriented programming model of
-Clojure and the interaction-oriented model of computation described by
-(among others) Robin Milner in
-link:http://www.cambridge.org/us/catalogue/catalogue.asp?isbn=0521658691[Communicating
-and Mobile Systems: The π-calculus]:
-
-[quote]
-----
-[T]he π-calculus can be seen as a basic model of computation.  Every
-basic model rests upon a small number of primitive notions: the
-π-calculus rests upon the primitive notion of _interaction_, just as
-Turing machines and register machines rest upon the notion of reading
-and writing a storage medium, and just as recursive equations and the
-λ-calculus rest upon mathematical functions.
-----
-
-Clojure, with core.async and support for meta-programming, is the
-perfect test-bed for working out an integrated model of interaction-
-and function-oriented programming, and web-programming in HTML is the
-perfect test case.  The first step is to treat HTML as the "machine"
-language of the BVM - "Browser Virtual Machine" - just as we can treat
-Javascript as the "machine" language of the JSVM (JavaScript Virtual
-Machine) that runs in the BVM.  From this perspective, every HTML tag
-represents a function, and a Clojure function that generates an HTML
-element in string form can be viewed as a _co-function_.  Functions
-are applied to and denote _values_; co-functions exhibit (and observe)
-_behaviors_.  A thorough explanation of this idea is beyond the scope
-of this README; interested readers should consult Milner and anything
-they can find on the web discussing co-algebras from a computational
-perspective.
-
-So the primary motivation for mirja.markup and its
-<<companions,companion libraries>> is to support _co-programming_ of
-HTML web applications using Clojure (co-) functions.
-link:https://hoplon.io/[Hoplon] apparently also represents HTML tags
-as functions, but it uses something called
-link:https://github.com/hoplon/hoplon/wiki/HLisp[HLisp].  Since HLisp
-is both undocumented and, apparently, not Clojure, I decided to roll
-my own by piggy-backing on clojure.data.xml.
-
-Two complementary libraries are under development.  One amounts to a
-protocol layer sitting between the application and the HTTP layer; its
-function is to completely shield the application from the details of
-HTTP - no routes, no HTTP requests, etc.  It does this by following
-the example of core.async (there are libraries that already do
-something like this.)  The other provides application programming
-support for first-class co-functions and co-namespaces; this makes web
-(co-) programming indistinguishable for ordinary Clojure programming -
-no <link> elements, for example; that sort of thing is handled
-automatically.  Together these libraries provide completely
-transparent support for web programming/co-programming.  That's the
-idea anyway, and so far it's looking pretty good.  I hope to have them
-ready to share by early January 2016 if not sooner.
-
 = [[summary]] summary
 
-miraj.markup is derived from
+miraj.co-dom is derived from
 link:https://github.com/clojure/data.xml[clojure.data.xml].  It
 extends `data.xml` to support HTML5, which is not XML; hence the name
 change.
 
-Like data.xml, miraj.markup has the following features:
+Like data.xml, miraj.co-dom has the following features:
 
 * Parses XML documents into Clojure data structures
 * Emits XML from Clojure data structures
@@ -105,7 +40,7 @@ Like data.xml, miraj.markup has the following features:
 * Uses StAX internally
 * lazy - should allow parsing and emitting of large XML documents
 
-In addition, miraj.markup understands HTML5 and Polymer.  It supports
+In addition, miraj.co-dom understands HTML5 and Polymer.  It supports
 the following features:
 
 * HTML5 <<bools,boolean attributes>>
@@ -121,26 +56,31 @@ the following features:
 
 * Functional programming of HTML apps - element constructors are functions
 
-* <<xforms,Transformations>> - miraj.markup functions generate Clojure data
+* <<xforms,Transformations>> - miraj.co-dom functions generate Clojure data
   structures (using the same Element record used by data.xml), which
   can be manipulated just like any other Clojure data structure.
-  miraj.markup comes with one predefined transform:
+  For example, the miraj.core library comes with a few predefined transforms:
 
-** `miraj.markup/optimize` pulls <script> elements out of the <head>
+** `miraj.core/normalize` elaborates the head element of an html page
+   specified using `miraj.core/defpage`, by extracting information
+   from Polymer libs in the `:request` clause of the `ns` declaration,
+   and using it to generate `<link>` elements.
+
+** `miraj.core/optimize` pulls <script> elements out of the <head>
   element and inserts them at the bottom of the page, just before the
   closing </body> tag.
 
-* <<co-comp,Co-compilation>> - generation of a static HTML file from miraj.markup code
+* <<co-comp,Co-compilation>> - generation of a static HTML file from miraj.co-dom code
 
 * support for easy-to-write <<conveniences,convenience wrappers>>
 
 === [[companions]] Companion libraries
 
-`miraj.markup` uses the same primitive constructors as `data.xml`; for
+`miraj.co-dom` uses the same primitive constructors as `data.xml`; for
 example, to construct `<div class="foo">bar</div>`, one writes
 `(element :div {:class "foo"} "bar")`.
 
-Several companion libraries provide convenience wrappers for miraj.markup:
+Several companion libraries provide convenience wrappers for miraj.co-dom:
 
 * link:https://github.com/mobileink/miraj.html[miraj.html] - provides
   one function per HTML5 element, so you can write `(div {:class
@@ -172,14 +112,14 @@ Several companion libraries provide convenience wrappers for miraj.markup:
 
 ** link:https://github.com/mobileink/polymer.molecules[polymer.molecules] - wrapped javascript libraries.
 
-This README file documents miraj.markup only.
+This README file documents miraj.co-dom only.
 
 = [[status]] status
 
-miraj.markup and its companion libraries are pre-alpha, proof-of-concept
+miraj.co-dom and its companion libraries are pre-alpha, proof-of-concept
 software.
 
-miraj.markup is designed to generate HTML5, not to read/parse it.  But
+miraj.co-dom is designed to generate HTML5, not to read/parse it.  But
 since it is derived from `data.xml` it should work with XML files.
 See the link:https://github.com/clojure/data.xml[clojure.data.xml]
 README for XML examples.
@@ -192,7 +132,7 @@ If you are using JDK 1.5, you will need to include a dependency on
 StAX.  More information on this is available
 link:https://github.com/clojure/data.xml/blob/jdk16-pull-parser/jdk_15_readme.txt[here].
 
-link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/latest-version.svg[]]
+link:http://clojars.org/miraj/co-dom[image:http://clojars.org/miraj/co-dom/latest-version.svg[]]
 
 === [[repl]] repl
 
@@ -200,18 +140,18 @@ link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/lates
 ----
 ;; src/test.clj
 (ns test
-  (:require [miraj.markup :refer :all]))
+  (:require [miraj.co-dom :refer :all]))
 
 (def doc (element :html
                   (element :head
                            (element :meta {:name "description"
-                                           :content "miraj.markup test"})
+                                           :content "miraj.co-dom test"})
                            (element :script {:src "/scripts/foo.js"}))
                   (element :body
                            (element :h1 "Hello World"))))
 
 (println doc)
-=> #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{...
+=> #miraj.co-dom.Element{:tag :html, :attrs {}, :content (#miraj.co-dom.Element{...
 
 (println (serialize doc))
 => <!doctype html><html><head><meta name="description" content="co-compile test"><script src="/scripts/foo.js"></script></head><body><h1>Hello World</h1></body></html>
@@ -230,7 +170,7 @@ link:http://clojars.org/miraj/markup[image:http://clojars.org/miraj/markup/lates
 user>
 
 (println (optimize :js doc))
-=> #miraj.markup.Element{:tag :html, :attrs {}, :content (#miraj.markup.Element{
+=> #miraj.co-dom.Element{:tag :html, :attrs {}, :content (#miraj.co-dom.Element{
 
 (pprint (optimize :js doc))
 <!doctype html>
@@ -270,13 +210,13 @@ See link:https://github.com/mobileink/miraj.hello-polymer[miraj.hello-polymer]
 Too soon to generate official API docs.  The
 link:http://clojure.github.io/data.xml/[data.xml API Reference] should
 suffice.  If you need to work with XML you should use that library
-instead of `miraj.markup`.  If you need to work with XHTML or some
-version of HTML < 5, you'll have to look elsewhere; `miraj.markup`
+instead of `miraj.co-dom`.  If you need to work with XHTML or some
+version of HTML < 5, you'll have to look elsewhere; `miraj.co-dom`
 only supports HTML5.  (That may change.)
 
-To program HTML, all you need is `miraj.markup/element`, which works
+To program HTML, all you need is `miraj.co-dom/element`, which works
 the same way `data.xml/element` works (although I notice the latter is
-not included in the API Reference.)  However, `miraj.markup/element`
+not included in the API Reference.)  However, `miraj.co-dom/element`
 extends `data.xml/element` to support the following features:
 
 === [[bools]] HTML5 link:http://www.w3.org/TR/html51/infrastructure.html#boolean-attributes[boolean attributes]
@@ -291,7 +231,7 @@ In HTML5 markup, boolean attributes do not need an attribute value; if
 a value is provided, it must be either the empty string "" or it must
 match the attribute name, e.g. `foo="foo"` or `foo=foo`.
 
-To express a boolean attribute in `miraj.markup`, use Clojure `nil` as
+To express a boolean attribute in `miraj.co-dom`, use Clojure `nil` as
 the attribute value.  Serialization will translate {:foo nil} to a
 boolean attribute without a value assignment.  For example:
 
@@ -307,7 +247,7 @@ Void elements cannot have any content; they also cannot be
 "self-closing"; void elements only have a start tag.  For arcane
 reasons we need not discuss here.
 
-`miraj.markup` understands void elements; no special markup is required.
+`miraj.co-dom` understands void elements; no special markup is required.
 
 [source,clojure]
 ----
@@ -317,7 +257,7 @@ reasons we need not discuss here.
 
 === [[empties]] HTML5 empty elements
 
-Empty elements must not be self-closing.  `miraj.markup` understands
+Empty elements must not be self-closing.  `miraj.co-dom` understands
 this and does the right thing:
 
 [source,clojure]
@@ -339,12 +279,12 @@ Clojure evaluation and then are serialized as strings, just as with
 ----
 
 Note that evaluation (reduction) occurs as in normal function
-evaluation, so the what gets constructed on the `miraj.markup.Element`
+evaluation, so the what gets constructed on the `miraj.co-dom.Element`
 is the value of the expression:
 
 [source,clojure]
 ----
-(element :foo {:bar (* 2 3)}) ;=> #miraj.markup.Element{:tag :foo, :attrs {:bar 6}, :content ()}
+(element :foo {:bar (* 2 3)}) ;=> #miraj.co-dom.Element{:tag :foo, :attrs {:bar 6}, :content ()}
 ----
 
 The exceptions are:
@@ -397,7 +337,7 @@ for brevity):
 (element :foo {:bar :x}) ;=> <foo bar="{{x}}"></foo>
 ----
 
-*CAVEAT:* since miraj.markup is intended for HTML5 generation,
+*CAVEAT:* since miraj.co-dom is intended for HTML5 generation,
  functionality specific to XML has not been tested, e.g. CDATA
  sections, processing instructions, etc.
 
@@ -409,7 +349,7 @@ Polymer
 link:https://www.polymer-project.org/1.0/docs/devguide/data-binding.html#property-binding[binding
 annotations] docs for details.
 
-To express a Polymer annotation in miraj.markup, use a symbol for
+To express a Polymer annotation in miraj.co-dom, use a symbol for
 one-way binding and a keyword for two-way binding:
 
 [source,clojure]
@@ -468,17 +408,17 @@ This syntax can be used with other attributes, as long as it comes first:
 
 === [[validation]] validation
 
-`miraj.markup` does a wee bit of validation, mostly as proof of
+`miraj.co-dom` does a wee bit of validation, mostly as proof of
 concept.  For example, when it sees a `rel` attribute it checks to
 make sure its value is one of the allowed link types, so
 e.g. `(element :link {:rel "foo"}...)` will throw an exception.
 
 === [[xforms]] transformations
 
-Since `miraj.markup` produces a Clojure data structure (tree or forest
-of `miraj.markup.Element` records), transformations can be applied.
+Since `miraj.co-dom` produces a Clojure data structure (tree or forest
+of `miraj.co-dom.Element` records), transformations can be applied.
 The library includes one transformation primitive,
-`miraj.markup/xsl-xform`, that takes an XSL stylesheet (as a string)
+`miraj.co-dom/xsl-xform`, that takes an XSL stylesheet (as a string)
 and an Element structure and applies the former to the latter.  For an
 example stylesheet see `xsl-optimize-js` in the source code.
 
@@ -503,9 +443,9 @@ in the introduction.  If we think of an HTML file as a program text,
 it's a program that we generate on one machine but interpret/execute
 on another.  So the process goes roughly like this
 
-1. write the source of the program in Clojure using miraj.markup;
-2. use Clojure to compile the miraj.markup code to a JVM bytecode program
-3  execute JVM bytecode program, generating a data structure of miraj.markup.Element nodes;
+1. write the source of the program in Clojure using miraj.co-dom;
+2. use Clojure to compile the miraj.co-dom code to a JVM bytecode program
+3  execute JVM bytecode program, generating a data structure of miraj.co-dom.Element nodes;
 3. serialize that data structure to a string of HTML
 4. write the string to disk
 5. send the string from disk to a browser client in response to a GET request
@@ -533,12 +473,12 @@ Just think of HTML as a kind of machine language for the BVM -
 
 * Co-compilation
 
-** is a function of the miraj.markup system
+** is a function of the miraj.co-dom system
 
 ** occurs on the local machine but as part of a process that is
    inherently interactive, involving at least two different machines
 
-** translates a program text from Clojure (the miraj.markup code) to
+** translates a program text from Clojure (the miraj.co-dom code) to
    another language, HTML, which can be viewed as the bytecode
    language of the Browser Virtual Machine
 
@@ -547,7 +487,7 @@ Just think of HTML as a kind of machine language for the BVM -
 ** the local file will later be loaded and executed _by a remote browser_
 
 
-In summary, the idea is that generating HTML from miraj.markup code
+In summary, the idea is that generating HTML from miraj.co-dom code
 (or any other HTML DSL) is just like compiling Clojure code, with one
 major difference: when you write an HTML program, you're actually
 _co-programming_ - using programming on a local system to program a
@@ -590,6 +530,14 @@ this technique to bring a little more order to the HTML <meta> tag,
 by providing, for example, some platform attributes.  So instead of
 writing:
 
+[source,clojure]
+----
+todo: pragma example
+----
+
+
+Also, meta elements can be expressed as plain clojure maps, e.g.
+
 [source,html]
 ----
 <meta name="apple-mobile-web-app-capable" content="yes" >
@@ -601,15 +549,16 @@ you can instead write:
 
 [source,clojure]
 ----
-(h/apple {:mobile-web-app {:capable true
+:platform {:apple {:mobile-web-app {:capable true
 	 		   :status-bar-style :default
-			   :title "My App"}})
+			   :title "My App"}}
+ ... etc. ...
 ----
 
 
 == [[bugs]] Bugs, Comments, Suggestions
 
-Open an link:https://github.com/mobileink/miraj.markup/issues[issue].
+Open an link:https://github.com/mobileink/miraj.co-dom/issues[issue].
 
 == [[license]] License
 

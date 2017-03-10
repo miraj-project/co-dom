@@ -1,0 +1,63 @@
+= [[motivation]] motivation
+
+Do we really need yet another HTML-in-Clojure library?  We already
+have link:https://github.com/weavejester/hiccup[Hiccup],
+link:https://hoplon.io/[Hoplon], and various template-based libraries;
+why another one?
+
+miraj.co-dom is the foundation layer of a more ambitious project to
+re-conceptualize web programming (and indeed computation) in a manner
+that integrates the traditional function-oriented programming model of
+Clojure and the interaction-oriented model of computation described by
+(among others) Robin Milner in
+link:http://www.cambridge.org/us/catalogue/catalogue.asp?isbn=0521658691[Communicating
+and Mobile Systems: The π-calculus]:
+
+[quote]
+----
+[T]he π-calculus can be seen as a basic model of computation.  Every
+basic model rests upon a small number of primitive notions: the
+π-calculus rests upon the primitive notion of _interaction_, just as
+Turing machines and register machines rest upon the notion of reading
+and writing a storage medium, and just as recursive equations and the
+λ-calculus rest upon mathematical functions.
+----
+
+Clojure, with core.async and support for meta-programming, is the
+perfect test-bed for working out an integrated model of interaction-
+and function-oriented programming, and web-programming in HTML is the
+perfect test case.  The first step is to treat HTML as the "machine"
+language of the BVM - "Browser Virtual Machine" - just as we can treat
+Javascript as the "machine" language of the JSVM (JavaScript Virtual
+Machine) that runs in the BVM.  From this perspective, every HTML tag
+represents a function, and a Clojure function that generates an HTML
+element in string form can be viewed as a _co-function_.  Functions
+are applied to and denote _values_; co-functions exhibit (and observe)
+_behaviors_.  A thorough explanation of this idea is beyond the scope
+of this README; interested readers should consult Milner and anything
+they can find on the web discussing co-algebras from a computational
+perspective.
+
+So the primary motivation for miraj.co-dom and its
+<<companions,companion libraries>> is to support _co-programming_ of
+HTML web applications using Clojure (co-) functions.
+link:https://hoplon.io/[Hoplon] apparently also represents HTML tags
+as functions, but it uses something called
+link:https://github.com/hoplon/hoplon/wiki/HLisp[HLisp].  Since HLisp
+is both undocumented and, apparently, not Clojure, I decided to roll
+my own by piggy-backing on clojure.data.xml.
+
+Two complementary libraries are under development.  One amounts to a
+protocol layer sitting between the application and the HTTP layer; its
+function is to completely shield the application from the details of
+HTTP - no routes, no HTTP requests, etc.  It does this by following
+the example of core.async (there are libraries that already do
+something like this.)  The other provides application programming
+support for first-class co-functions and co-namespaces; this makes web
+(co-) programming indistinguishable for ordinary Clojure programming -
+no <link> elements, for example; that sort of thing is handled
+automatically.  Together these libraries provide completely
+transparent support for web programming/co-programming.  That's the
+idea anyway, and so far it's looking pretty good.  I hope to have them
+ready to share by early January 2016 if not sooner.
+
