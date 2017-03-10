@@ -9,6 +9,8 @@
                    [org.clojure/clojurescript "1.7.228"]
                    [clj-time "0.11.0"]
 
+                   ;; testing only
+                   [miraj/html "5.1.0-SNAPSHOT" :scope "test"]
                    [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
                    ;; [miraj.polymer/iron "1.2.3-SNAPSHOT" :scope "test"]
 

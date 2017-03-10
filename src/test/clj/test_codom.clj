@@ -1,6 +1,7 @@
 (ns test_codom
   (:refer-clojure :exclude [import])
-  (:require [miraj.co-dom :refer :all]))
+  (:require [miraj.co-dom :refer :all]
+            [miraj.html :as h]))
 
 ;; (def doc (element :html
 ;;                   (element :head
@@ -14,11 +15,12 @@
 
 ;; (serialize doc)
 
-(serialize (element :div {:$background-color "red"
-                          :$color "green"
-                          :id "foo"
-                          :bar 99}))
+(pprint (element :div :#foo.bar!centered
+                    {:$background-color "red"
+                     :bar 99}))
 
+(serialize
+ (h/div :#mydiv.centered {:$color "green" :foo 99}))
 
 ;; (pprint doc)
 

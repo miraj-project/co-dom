@@ -976,6 +976,8 @@
        (cons f
              (flatten-elements (next-events e (rest elements)))))))))
 
+(declare parse-elt-args)
+
 (defn- handle-special-kws
   [attrs content]
   ;; id, class, and boolean attrs: must come first, and be chained
@@ -984,7 +986,7 @@
   ;; (span ::foo.bar) => <span id="foo" class="bar"></span>
   ;; (span ::.foo.bar) => <span class="foo bar"></span>
   ;; (span :bool/foo) => <span foo></span>
-  (log/info "KEYWORD? attrs: " attrs)
+  (log/info "HANDLE-SPECIAL-KWS: " attrs)
   (if (nil? (namespace attrs)) ;; (span :foo) => <span>[[foo]]</span>
     (let [token (name attrs)]
       (if (or (.startsWith token "#") (.startsWith token ".") (.startsWith token "!"))
@@ -1031,12 +1033,16 @@
           ;;       ;;            [{:id attrs :class (str/trim (str/join " " (rest classes)))} content]
           ;;       ;;            [{:id attrs} content]))]
           ;;       ]
-          ;; (println "CONTENT: " (last result))
+          (log/debug "RESULT CONTENT: " content)
           (if (map? (first (last result)))
             (if (instance? miraj.co_dom.Element (first (last result)))
-              result
-              [(merge (first result) (first (last result))) (rest (last result))])
-            result));)
+              (do (log/debug (format "ELT" ))
+                  result)
+              (do (log/debug (format "MAPP" ))
+                  (parse-elt-args
+                   (merge (first result) (first (last result))) (rest (last result)))))
+            (do (log/debug (format "NONMAP" ))
+                result)))
         ;; else not a special kw
         [{} (list attrs content)]))
     ;; else namespace not nil - disallow?
@@ -1074,10 +1080,13 @@
                                       c (get attr-name 0)]
                                   (= c \$)))
                               attrs)))
-          _ (log/debug (format "STYLE ATTRS %s" style-attrs))
-          style (str/join "" (for [[k v] style-attrs] (str (subs (name k) 1) ":" v ";")))
-          _ (log/debug (format "STYLE STRING %s" style))
-          valids (merge other-attrs {:style style})
+          _ (log/debug (format "STYLE attrs %s empty? %s" style-attrs (empty? style-attrs)))
+          style (if (empty? style-attrs)
+                  (do (log/debug (format "EMPTY" )) {})
+                  {:style (str/join "" 
+                                    (for [[k v] style-attrs] (str (subs (name k) 1) ":" v ";")))})
+          _ (log/debug (format "STYLE  %s" style))
+          valids (merge style other-attrs)
 ;; valids (merge-with concat (for [[k v] attrs]
 ;;                    (if (not (keyword? k))
 ;;                      (throw (Exception.
@@ -1102,7 +1111,7 @@
 
 (defn parse-elt-args
   [attrs content]
-  (log/info "parse-elt-args ATTRS: " attrs " (ns: " *ns*) ;; " CONTENT: " content)
+  (log/info "parse-elt-args ATTRS: " attrs " CONTENT: " content)
   (let [special-kws (filter (fn [tok]
                               (and (keyword? tok)
                                    (nil? (namespace tok))
@@ -1139,10 +1148,15 @@
                 [{} (remove empty? (list attrs content))]))))
 
 (defn element [tag & [attrs & content]]
-  ;; (println "ELEMENT: TAG: " tag " ATTRS: " attrs " CONTENT: " content)
+  (println "ELEMENT: TAG: " tag " ATTRS: " attrs " CONTENT: " content)
   (let [[attribs contents] (parse-elt-args (or attrs {}) (or content '()))
-        ;; _ (println "ELEMENT ATTRIBS: " attribs)
-        ;; _ (println "ELEMENT CONTENT: " content)
+        _ (log/debug "ELEMENT ATTRIBS: " attribs)
+        _ (log/debug "ELEMENT CONTENT: " contents)
+        [attribs contents] (do (log/debug (format "FIRST CONTENTS %s" (first contents)))
+                               (if (map? (first contents))
+                                 (parse-elt-args
+                                  (merge attribs (first contents)) (rest contents))
+                                 [attribs contents]))
         e (Element. tag (or attribs {}) (or contents '()))]
         ;; e (if (= (type attrs) miraj.co-dom.Element)
         ;;     (Element. tag {} (remove nil? (apply list attrs content)))
@@ -1574,7 +1588,7 @@
 
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  ;; (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
+  (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))
         newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds}) ;; :uri uri :_webcomponent true})
                        (fn [& args]
