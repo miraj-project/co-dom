@@ -8,21 +8,21 @@
 
 (ns ^{:doc "Test resource handling"
       :author "Gregg Reynolds"}
-  miraj.markup.resources-test
-  (:refer-clojure :exclude [import require])
+  miraj.co-dom.resources-test
+;;  (:refer-clojure :exclude [import require])
   (:require [clojure.java.io :as io]
             [clojure.test :refer :all]
-            [miraj.markup :refer :all]))
+            [miraj.co-dom :refer :all]))
 
-(pprint (require '[polymer.paper :as paper :refer [button]]))
+(pprint (require '[miraj.polymer.paper :as paper :refer [button]]))
 
 (deftest ^:resources res-1
-  (let [e (serialize (require '[polymer.paper :as paper :refer [button]]))]
+  (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
     (is (= e
            "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))))
 
 (deftest ^:resources res-2
-  (let [e (serialize (require '[polymer.paper :as paper :refer [button]]))]
+  (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
     (is (= e
            "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))
     (is (= (serialize (paper/button)) "<paper-button></paper-button>"))))

@@ -8,28 +8,28 @@
 
 (ns ^{:doc "Test attribute handing"
       :author "Gregg Reynolds"}
-  miraj.markup.attrs-test
+  miraj.co-dom.attrs-test
   (:refer-clojure :exclude [import require])
   (:require ;;[org.clojure/clojure "1.8.0-RC4"]
             [clojure.java.io :as io]
             [clojure.test :refer :all]
 ;;            [miraj.html :as h]
-            [miraj.markup :refer :all]))
+            [miraj.co-dom :refer :all]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ATTRIBUTE tests
 
 (deftest ^:attrs attr-1
   (let [e (element :div {:class "secret"})]
-    (is (= e #miraj.markup.Element{:tag :div, :attrs {:class "secret"}, :content ()}))))
+    (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:class "secret"}, :content ()}))))
 
 (deftest ^:attrs attr-2
   (let [e (element :div {:class :secret})]
-    (is (= e #miraj.markup.Element{:tag :div, :attrs {:class :secret}, :content ()}))))
+    (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:class :secret}, :content ()}))))
 
 (deftest ^:attrs attr-3
   (let [e (element :div {:class 'secret})]
-    (is (= e #miraj.markup.Element{:tag :div, :attrs {:class secret}, :content ()}))
+    (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:class secret}, :content ()}))
     (is (= (type (:class (:attrs e) symbol))))
     (is (= (:class (:attrs e) 'secret)))))
 
@@ -42,7 +42,7 @@
 (deftest ^:attrs namecase-0
   (testing "OBSOLETE: HTML attr names are case-insensitive.  Currently we only allow camel-case (lower-case with dashes); this will be relaxed in a later version."
     (let [e (element :div {:fooBar "baz"})]
-      (is (= e #miraj.markup.Element{:tag :div, :attrs {:fooBar "baz"}, :content ()}))
+      (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:fooBar "baz"}, :content ()}))
       (is (= (serialize :xml e) "<div fooBar=\"baz\"></div>"))
       #_(is (thrown-with-msg? Exception #"HTML attribute names are case-insensitive; currently, only lower-case is allowed."
                             (serialize e)))
@@ -51,7 +51,7 @@
 (deftest ^:attrs namecase-1
   (testing "OBSOLETE: HTML serialization converts clojure-case attr names."
     (let [e (element :div {:context-menu "foo"})]
-      (is (= e #miraj.markup.Element{:tag :div, :attrs {:context-menu "foo"}, :content ()}))
+      (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:context-menu "foo"}, :content ()}))
       (is (= (serialize :xml e) "<div context-menu=\"foo\"></div>"))
       #_(is (= (serialize e) "<div contextmenu=\"foo\"></div>")))))
 
@@ -59,7 +59,7 @@
 ;; without a value.  Use nil as attrib value to express this.
 (deftest ^:attrs bool-1
   (let [e (element :body {:unresolved nil})]
-    (is (= e #miraj.markup.Element{:tag :body, :attrs {:unresolved nil}, :content ()}))
+    (is (= e #miraj.co_dom.Element{:tag :body, :attrs {:unresolved nil}, :content ()}))
     (is (= (serialize e) "<body unresolved></body>"))))
 
 ;; (deftest ^:attrs bool-2
@@ -72,7 +72,7 @@
 ;; a list of link types.  Serialization validates (some of) these.
 (deftest ^:attrs val-4
   (let [e (element :link {:rel "author"})]
-    (is (= e #miraj.markup.Element{:tag :link, :attrs {:rel "author"}, :content ()}))
+    (is (= e #miraj.co_dom.Element{:tag :link, :attrs {:rel "author"}, :content ()}))
     (is (= (serialize e) "<link rel=\"author\">"))))
 
 (deftest ^:attrs val-5
