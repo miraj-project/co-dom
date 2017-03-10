@@ -9,7 +9,7 @@
 (ns ^{:doc "Tests for XML parsing functions."
       :author "Chris Houser"}
   data.xml.test-parse
-  (:require [miraj.markup :refer :all :exclude [import require]])
+  (:require [miraj.co-dom :refer :all :exclude [import require]])
   (:use clojure.test
         [data.xml.test-utils :only [test-stream lazy-parse*]]))
 

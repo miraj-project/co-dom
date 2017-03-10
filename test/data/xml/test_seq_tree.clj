@@ -9,7 +9,7 @@
 (ns ^{:doc "Tests for seq-tree, building a lazy tree from lazy seq."
       :author "Chris Houser"}
   data.xml.test-seq-tree
-  (:require [miraj.markup :refer :all :exclude [import require]])
+  (:require [miraj.co-dom :refer :all :exclude [import require]])
   (:use clojure.test)
   (:import (java.lang.ref WeakReference)))
 
