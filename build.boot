@@ -3,14 +3,15 @@
 
 (set-env!
  :resource-paths #{"src/main/clj"}
- :source-paths #{"src/main/clj" "src/test/clj"}
+ :source-paths #{"src/test/clj"}
  :dependencies   '[[org.clojure/clojure RELEASE :scope "provided"]
                    [org.clojure/data.json "0.2.6"]
                    [org.clojure/clojurescript "1.7.228"]
                    [clj-time "0.11.0"]
 
                    ;; testing only
-                   [miraj/html "5.1.0-SNAPSHOT" :scope "test"]
+                   [miraj/core "0.1.0-SNAPSHOT" :scope "test"]
+;                   [miraj/html "5.1.0-SNAPSHOT" :scope "test"]
                    [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
                    ;; [miraj.polymer/iron "1.2.3-SNAPSHOT" :scope "test"]
 
@@ -56,7 +57,7 @@
   (comp (repl)
         (watch)
         (notify :audible true)
-        (refresh)))
+        #_(refresh)))
         ;; (pom)
         ;; (jar)
         ;; (install)))

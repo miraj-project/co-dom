@@ -10,7 +10,8 @@
       :author "Gregg Reynolds, Chris Houser"}
   miraj.co-dom
   (:refer-clojure :exclude [import require])
-  (:require [clojure.string :as str]
+  (:require [clojure.spec :as spec]
+            [clojure.string :as str]
             [clojure.data.json :as json]
             ;; [cheshire.core :as json :refer :all]
             [clj-time.core :as t]
@@ -22,7 +23,9 @@
             ;; [cljs.compiler :as c]
             ;; [cljs.closure :as cc]
             ;; [cljs.env :as env]
-            [clojure.tools.logging :as log :only [trace debug error info]])
+            [clojure.tools.logging :as log :only [trace debug error info]]
+            ;; [miraj.html :as html]
+            )
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
                              XMLStreamReader
@@ -36,12 +39,14 @@
            ;; [miraj NSException]))
 ;;           [java.util Date]))
 
-;; (println "loading miraj/co-dom.clj")
+(println "loading miraj/co-dom.clj")
 ;;FIXME:  support comment nodes
 
 (defonce mode (atom nil))
 (defonce verify? (atom false))
-(defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_955196")
+
+(defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_5HgyKgZoQSuzPt9U")
+(defonce miraj-pseudo-kw :__MIRAJ_PSEUDO_sfmWqa5HptMJ6ATR)
 
 (defn pprint-str [m]
   (let [w (StringWriter.)] (pp/pprint m w)(.toString w)))
@@ -258,6 +263,17 @@
      "</xsl:copy>"
    "</xsl:template>"
 
+   "<xsl:template match='//*[@" (name miraj-pseudo-kw) "]' priority='999'>"
+     "<xsl:copy>"
+       "<xsl:apply-templates select='@*|node()'/>"
+     "</xsl:copy>"
+     "<xsl:element name='style'>"
+       "<xsl:value-of select='@" (name miraj-pseudo-kw) "'/>"
+     "</xsl:element>"
+   "</xsl:template>"
+
+
+
    "<xsl:template match='html'>"
      "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;</xsl:text>"
      "<xsl:text>&#x0A;</xsl:text>"
@@ -301,6 +317,7 @@
    "</xsl:template>"
 
    "<xsl:template match=\"@*\">"
+   ;; "<xsl:message>YYYYYYYYYYYYYYYY</xsl:message>"
    ;; Handle HTML boolean attributes
      "<xsl:choose>"
        ;; "<xsl:when test='name() = .'>"
@@ -323,22 +340,15 @@
            miraj-boolean-tag
          "</xsl:attribute>"
        "</xsl:when>"
+     ;; Handle PSEUDO attributes
+       "<xsl:when test='name() = \"" (name miraj-pseudo-kw) "\"'>"
+       ;; omit the attribute
+       "</xsl:when>"
        "<xsl:otherwise>"
          "<xsl:copy/>"
        "</xsl:otherwise>"
      "</xsl:choose>"
-     ;; ;; Handle JSON encoding
-     ;; "<xsl:choose>"
-     ;;   "<xsl:when test='starts-with(., \"__JSON__\")'>"
-     ;;     "<xsl:attribute name='{name()}'>"
-     ;;        "<xsl:text disable-output-escaping='yes'>'{\"foo\": 99}'</xsl:text>"
-     ;;        ;; "'<xsl:value-of select='.'/>'"
-     ;;     "</xsl:attribute>"
-     ;;   "</xsl:when>"
-     ;;   "<xsl:otherwise>"
-     ;;     "<xsl:copy/>"
-     ;;   "</xsl:otherwise>"
-     ;; "</xsl:choose>"
+
 
    "</xsl:template>"
    "</xsl:stylesheet>"))
@@ -419,6 +429,16 @@
        "<xsl:apply-templates select='@*|node()'/>"
      "</xsl:copy>"
    "</xsl:template>"
+
+   ;; "<xsl:template match='@" miraj-pseudo-kw "' priority='99'>"
+   ;;     "<xsl:element name='link'>"
+   ;;       "<xsl:attribute name='rel'>import</xsl:attribute>"
+   ;;       "<xsl:attribute name='href'>"
+   ;;         "<xsl:text>/bower_components/polymer/polymer.html</xsl:text>"
+   ;;       "</xsl:attribute>"
+   ;;     "</xsl:element>"
+   ;; "</xsl:template>"
+
 
    ;; ;; "<xsl:template match='script'/>"
    ;; "<xsl:template match='script/text()'>"
@@ -616,6 +636,8 @@
                        (.write sw "<!doctype html>\n"))
                      sw))
         factory (TransformerFactory/newInstance)
+
+        ;; _ (log/debug (format "XSL-ID-X %s" xsl-identity-transform-html))
         transformer (if (= :html @mode)
                       (do
                         ;;(log/trace "transforming with xsl-identity-transform-html: " xsl-identity-transform-html)
@@ -817,8 +839,6 @@
     ;; (println ":BODY " content)
     [:body content]))
 
-
-
 (defn emit-cdata [^String cdata-str ^javax.xml.stream.XMLStreamWriter writer]
   ;; (println "EMIT-CDATA " cdata-str)
   (when-not (str-empty? cdata-str)
@@ -978,84 +998,124 @@
 
 (declare parse-elt-args)
 
-(defn- handle-special-kws
-  [attrs content]
-  ;; id, class, and boolean attrs: must come first, and be chained
+(def pseudo-attrs
+  #{:$active :$checked :$disabled :$enabled :$focus :$hover :$indeterminate :$lang :$link :$target :$visited
+    :$root :$nth-child :$nth-last-child :$nth-of-type :$nth-last-of-type :$first-child :$last-child :$first-of-type :$last-of-type :$only-child :$only-of-type :$empty
+    :$after :$before :$first-line :$first-letter})
+
+(defn- attr-map?
+  [m]
+  (and (map? m)
+       (not (instance? miraj.co_dom.Element m))))
+
+(defn- special-kw?
+  [tok]
+  (and (keyword? tok)
+       (nil? (namespace tok))
+       (let [tokstr (name tok)]
+         (or (.startsWith tokstr "#")
+             (.startsWith tokstr ".")
+             (.startsWith tokstr "!")))))
+
+(defn- validate-kw-attrib
+  [tag attr]
+  ;; id, class, and boolean attr: must come first, and be chained
   ;; e.g.  :#foo.bar.baz?centered
   ;; (span ::foo) => <span id="foo"></span>
   ;; (span ::foo.bar) => <span id="foo" class="bar"></span>
   ;; (span ::.foo.bar) => <span class="foo bar"></span>
   ;; (span :bool/foo) => <span foo></span>
-  (log/info "HANDLE-SPECIAL-KWS: " attrs)
-  (if (nil? (namespace attrs)) ;; (span :foo) => <span>[[foo]]</span>
-    (let [token (name attrs)]
+  ;; (log/info "VALIDATE-KW-ATTRIB: " attr)
+  (if (nil? (namespace attr)) ;; (span :foo) => <span>[[foo]]</span>
+    (let [token (name attr)]
       (if (or (.startsWith token "#") (.startsWith token ".") (.startsWith token "!"))
         (let [tokens (str/split
                       (str/trim (str/replace token #"(#|\.|\!)" " $1")) #" ")
-              _ (log/debug (format "TOKENS %s => %s" attrs tokens))
+              ;; _ (log/debug (format "TOKENS %s => %s" attr tokens))
 
               id-tokens (filter (fn [t] (str/starts-with? t "#")) tokens)
-              _ (log/debug (format "ID TOKS %s" (seq id-tokens)))
+              ;; _ (log/debug (format "ID TOKS %s" (seq id-tokens)))
               id-tokens (map (fn [t] (subs t 1)) id-tokens)
               id-attribs (if (empty? id-tokens) {} {:id (str/join " " id-tokens)})
-              _ (log/debug (format "ID ATTRIBS %s" id-attribs))
+              ;; _ (log/debug (format "ID ATTRIBS %s" id-attribs))
 
               class-tokens (filter (fn [t] (str/starts-with? t ".")) tokens)
-              _ (log/debug (format "CLASS TOKENS %s" (seq class-tokens)))
+              ;; _ (log/debug (format "CLASS TOKENS %s" (seq class-tokens)))
               class-tokens (map (fn [t] (subs t 1)) class-tokens)
               class-attribs (if (empty? class-tokens)
                               {} {:class (str/join " " class-tokens)})
-              _ (log/debug (format "CLASS ATTRIBS %s" class-attribs))
+              ;; _ (log/debug (format "CLASS ATTRIBS %s" class-attribs))
 
               boolean-tokens (filter (fn [t] (str/starts-with? t "!")) tokens)
               boolean-tokens (map (fn [t] (subs t 1)) boolean-tokens)
-              _ (log/debug (format "BOOLEAN TOKENS %s" (seq boolean-tokens)))
+              ;; _ (log/debug (format "BOOLEAN TOKENS %s" (seq boolean-tokens)))
               boolean-attribs (if (empty? boolean-tokens)
                                 {} (into {} (for [t boolean-tokens]
                                               {(keyword t) (str miraj-boolean-tag)})))
-              _ (log/debug (format "BOOLEAN ATTRIBS %s" boolean-attribs))
+              ;; _ (log/debug (format "BOOLEAN ATTRIBS %s" boolean-attribs))
 
               attribs (merge id-attribs class-attribs boolean-attribs)
-              result [attribs content]
+              result [attribs]
               ]
-          (log/debug (format "RESULT ATTRIBS %s" attribs))
-          ;; (let [is-id (.startsWith token "#")
-          ;;       is-class (.startsWith token ".")
-          ;;       is-boolean (.startsWith token ""!")
-          ;;       classes (filter identity (str/split token #"\."))
-          ;;       attrs (first classes)
-          ;;       ;; (doall classes)
-          ;;       ;; _ (println "CLASSES: " classes attrs)
-          ;;       ;; _ (println "REST CLASSES: " (rest classes))
-          ;;       ;; result (if is-class
-          ;;       ;;          [{:class (str/trim (str/join " " classes))} content]
-          ;;       ;;          (if (seq (rest classes))
-          ;;       ;;            [{:id attrs :class (str/trim (str/join " " (rest classes)))} content]
-          ;;       ;;            [{:id attrs} content]))]
-          ;;       ]
-          (log/debug "RESULT CONTENT: " content)
-          (if (map? (first (last result)))
-            (if (instance? miraj.co_dom.Element (first (last result)))
-              (do (log/debug (format "ELT" ))
-                  result)
-              (do (log/debug (format "MAPP" ))
-                  (parse-elt-args
-                   (merge (first result) (first (last result))) (rest (last result)))))
-            (do (log/debug (format "NONMAP" ))
-                result)))
-        ;; else not a special kw
-        [{} (list attrs content)]))
-    ;; else namespace not nil - disallow?
-    ))
+          attribs)))))
+    ;;       ;; (log/debug (format "RESULT ATTRIBS %s" attribs))
+    ;;       ;; (let [is-id (.startsWith token "#")
+    ;;       ;;       is-class (.startsWith token ".")
+    ;;       ;;       is-boolean (.startsWith token ""!")
+    ;;       ;;       classes (filter identity (str/split token #"\."))
+    ;;       ;;       attr (first classes)
+    ;;       ;;       ;; (doall classes)
+    ;;       ;;       ;; _ (println "CLASSES: " classes attr)
+    ;;       ;;       ;; _ (println "REST CLASSES: " (rest classes))
+    ;;       ;;       ;; result (if is-class
+    ;;       ;;       ;;          [{:class (str/trim (str/join " " classes))} content]
+    ;;       ;;       ;;          (if (seq (rest classes))
+    ;;       ;;       ;;            [{:id attr :class (str/trim (str/join " " (rest classes)))} content]
+    ;;       ;;       ;;            [{:id attr} content]))]
+    ;;       ;;       ]
+    ;;       ;; (log/debug "RESULT CONTENT: " content)
+    ;;       #_(if (map? (first (last result)))
+    ;;         (if (instance? miraj.co_dom.Element (first (last result)))
+    ;;           (do ;; (log/debug (format "ELT" ))
+    ;;               result)
+    ;;           (do ;; (log/debug (format "MAPP" ))
+    ;;               (parse-elt-args tag
+    ;;                (merge (first result) (first (last result))) (rest (last result)))))
+    ;;         (do ;; (log/debug (format "NONMAP" ))
+    ;;             result)))
+    ;;     ;; else not a special kw
+    ;;     ;;[{} (list attr content)]
+    ;;     attribs
+    ;;     ))
+    ;; ;; else namespace not nil - disallow?
+    ;; ))
 
-(defn- validate-attribute-map
-  [attrs content]
+(defn get-specials-map
+  [tag specials]
+  (let [sm (into {} (for [special specials] (validate-kw-attrib tag special)))]
+    ;; (log/debug (format "SPECIALS MAP %s" sm))
+    sm))
+
+(defn- get-pseudo-styles
+  [tag attrs uuid]
+  (let [style (for [[nm val] attrs]
+                (let [selector (str  "." uuid ":" (subs (name nm) 1)) ;;(name tag)
+                      style (str/join "" (for [[k v] val]
+                                           (str (name k) ":"
+                                                (if (= k :content) (str "'" v "'") v)
+                                                ";")))]
+                  (str selector "{"style"}")))]
+    ;; (log/debug (format "GET-PSEUDO %s" (seq style)))
+    (str/join " " style)))
+
+(defn- normalize-attributes
+  [tag attrs content]
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  (log/debug (format "VALIDATE-ATTRS %s" attrs))
+  ;; (log/debug (format "VALIDATE-ATTRS %s" attrs))
   (if (instance?  miraj.co_dom.Element attrs)
-    (do ;;(println "Element instance")
+    (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
     (let [other-attrs (apply hash-map
                              (flatten (filter (fn [[k v]]
@@ -1063,30 +1123,46 @@
                                                   (throw (Exception.
                                                           (format "Only keyword attr names supported: %s is %s"
                                                                   k (type k)))))
-                                                (let [attr-ns (namespace k)
-                                                      attr-name (name k)
-                                                      c (get attr-name 0)]
-                                                  (java.lang.Character/isLetter c)))
-                                              attrs)))
-          _ (log/debug (format "OTHER ATTRS %s" other-attrs))
+                                                (or (= k miraj-pseudo-kw)
+                                                    (let [attr-ns (namespace k)
+                                                          attr-name (name k)
+                                                          c (get attr-name 0)]
+                                                      (java.lang.Character/isLetter c))))
+                                              (dissoc attrs :content))))
+          ;; _ (log/debug (format "OTHER Attrs  %s" other-attrs))
+
+          pseudo-attrs (apply hash-map
+                              (flatten (filter (fn [[k v]] (contains? pseudo-attrs k)) attrs)))
+          pseudo-class (if (empty? pseudo-attrs) nil (str "miraj_"
+                                                          #_(rand-int 100000)
+                                                          (java.util.UUID/randomUUID)))
+          pseudo (if (empty? pseudo-attrs)
+                   {}
+                   {miraj-pseudo-kw (get-pseudo-styles tag pseudo-attrs pseudo-class)})
+          ;; _ (log/debug (format "PSEUDO %s" pseudo))
+
+          other-attrs (if (empty? pseudo) other-attrs
+                          (update-in other-attrs [:class]
+                                     (fn [old] (str old " " pseudo-class))))
+          ;; _ (log/debug (format "WITH PSEUDO %s" other-attrs))
+
           style-attrs (apply hash-map
                               (flatten (filter (fn [[k v]]
-                                (if (not (keyword? k))
-                                  (throw (Exception.
-                                          (format "Only keyword attr names supported: %s is %s"
-                                                  k (type k)))))
-                                (let [attr-ns (namespace k)
-                                      attr-name (name k)
-                                      c (get attr-name 0)]
-                                  (= c \$)))
-                              attrs)))
-          _ (log/debug (format "STYLE attrs %s empty? %s" style-attrs (empty? style-attrs)))
+                                                 (and (not (contains? pseudo-attrs k))
+                                                      (let [attr-ns (namespace k)
+                                                            attr-name (name k)
+                                                            c (get attr-name 0)]
+                                                        (= c \$))))
+                                                 attrs)))
+          ;; _ (log/debug (format "STYLE attrs %s empty? %s" style-attrs (empty? style-attrs)))
+
           style (if (empty? style-attrs)
-                  (do (log/debug (format "EMPTY" )) {})
-                  {:style (str/join "" 
+                  (do ;; (log/debug (format "EMPTY" ))
+                      {})
+                  {:style (str/join ""
                                     (for [[k v] style-attrs] (str (subs (name k) 1) ":" v ";")))})
-          _ (log/debug (format "STYLE  %s" style))
-          valids (merge style other-attrs)
+          ;; _ (log/debug (format "STYLE  %s" style))
+          valids (merge style other-attrs pseudo)
 ;; valids (merge-with concat (for [[k v] attrs]
 ;;                    (if (not (keyword? k))
 ;;                      (throw (Exception.
@@ -1106,64 +1182,118 @@
 ;;                            (throw (Exception.
 ;;                                    (format "Invalid attribute name: %s" (name k))))))))))
                            ]
-      (log/debug (format "VALIDS %s" valids))
-      [valids content])))
+      ;; (log/debug (format "VALIDS %s" valids))
+      valids)))
 
 (defn parse-elt-args
-  [attrs content]
-  (log/info "parse-elt-args ATTRS: " attrs " CONTENT: " content)
-  (let [special-kws (filter (fn [tok]
-                              (and (keyword? tok)
-                                   (nil? (namespace tok))
-                                   (let [tokstr (name tok)]
-                                     (or (.startsWith tokstr "#")
-                                         (.startsWith tokstr ".")
-                                         (.startsWith tokstr "!")))))
-                            content)
-        content (filter (fn [tok]
-                          (or (not (keyword? tok))
-                              (not (nil? (namespace tok)))
-                              (let [tokstr (name tok)]
-                                (not (or (.startsWith tokstr "#")
-                                         (.startsWith tokstr ".")
-                                         (.startsWith tokstr "!"))))))
-                        content)]
-    ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
-    ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
-    (cond
-      ;;TODO support boolean, etc. for CDATA elts
-      (number? attrs)
-      (do ;;(println "number? attrs: " attrs)
+  [tag attrs content]
+  (log/info "parse-elt-args TAG " tag " ATTRS: " attrs " CONTENT: " content)
+  (if (empty? attrs)
+    [attrs content]
+    (let [special-kws (filter (fn [tok]
+                                (and (keyword? tok)
+                                     (nil? (namespace tok))
+                                     (let [tokstr (name tok)]
+                                       (or (.startsWith tokstr "#")
+                                           (.startsWith tokstr ".")
+                                           (.startsWith tokstr "!")))))
+                              content)
+          content (filter (fn [tok]
+                            (or (not (keyword? tok))
+                                (not (nil? (namespace tok)))
+                                (let [tokstr (name tok)]
+                                  (not (or (.startsWith tokstr "#")
+                                           (.startsWith tokstr ".")
+                                           (.startsWith tokstr "!"))))))
+                          content)]
+      ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
+      ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
+      (cond
+        ;;TODO support boolean, etc. for CDATA elts
+        (number? attrs)
+        (do ;;(println "number? attrs: " attrs)
           ;; (span 3) => <span>3</span>
-        [{} (remove empty? (list (str attrs) content))])
+          [{} (remove empty? (list (str attrs) content))])
 
-      (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
-      [{} (list attrs (remove nil? content))]
+        (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
+        [{} (list attrs (remove nil? content))]
 
-      (keyword? attrs) (handle-special-kws attrs content)
+        (keyword? attrs) (validate-kw-attrib tag attrs content)
 
-      (map? attrs) (validate-attribute-map attrs content)
+        (map? attrs) (normalize-attributes tag attrs content)
 
-      :else (do ;;(println "NOT map attrs: " attrs)
-                [{} (remove empty? (list attrs content))]))))
+        :else (do ;;(println "NOT map attrs: " attrs)
+                [{} (remove empty? (list attrs content))])))))
 
-(defn element [tag & [attrs & content]]
-  (println "ELEMENT: TAG: " tag " ATTRS: " attrs " CONTENT: " content)
-  (let [[attribs contents] (parse-elt-args (or attrs {}) (or content '()))
-        _ (log/debug "ELEMENT ATTRIBS: " attribs)
-        _ (log/debug "ELEMENT CONTENT: " contents)
-        [attribs contents] (do (log/debug (format "FIRST CONTENTS %s" (first contents)))
-                               (if (map? (first contents))
-                                 (parse-elt-args
-                                  (merge attribs (first contents)) (rest contents))
-                                 [attribs contents]))
-        e (Element. tag (or attribs {}) (or contents '()))]
+(defn element
+  [tag & args]
+  ;; (log/debug "ELEMENT: " tag " ARGS: " args)
+  (let [;; args (first args)
+
+        special-attrs (filter #(special-kw? %) args)
+
+        ;; _ (log/debug (format "Specials %s" (seq special-attrs)))
+
+        specials-map (get-specials-map tag special-attrs)
+        ;; _ (log/debug (format "Specials MAP %s" specials-map))
+
+        content (filter (fn [arg]
+                          (and (not (special-kw? arg))
+                               (not (attr-map? arg))))
+                        args)
+        ;; _ (log/debug (format "Content %s" (seq content)))
+
+        attr-map (normalize-attributes tag (into {} (filter attr-map? args)) content)
+        ;; _ (log/debug (format "Attr-map %s" attr-map))
+
+        ids (let [c1 (:id attr-map)
+                  c2 (:id specials-map)
+                  id (str/trim (str/join " " [c1 c2]))]
+              ;; (log/debug (format "ID COUNT %s %s" id (count (str/split #" " id))))
+              (if (> (count (str/split id #" "))
+                     1) (throw (Exception. (format "Only one ID allowed: %s" id))))
+              id)
+        ;; _ (log/debug (format "IDS %s" ids))
+
+        classes (let [c1 (:class attr-map)
+                      c2 (:class specials-map)]
+                  (str/trim (str/join " " [c1 c2])))
+        ;; _ (log/debug (format "Classes %s" classes))
+
+        attrs (merge attr-map specials-map)
+        attrs (if (empty? classes)
+                attrs
+                (assoc attrs :class classes))
+
+        ;; _ (log/debug (format "Attrs %s" attrs))
+
+
+        ;; [attrs content] (if (empty? args) [{} '()]
+        ;;                     (let [arg1 (first args)]
+        ;;                       (if (instance? miraj.co_dom.Element arg1)
+        ;;                         [{} arg1]
+        ;;                         (if (map? arg1)
+        ;;                           [arg1 (rest args)]
+        ;;                           (if (keyword? arg1)
+        ;;                             [arg1 (rest args)]
+        ;;                             [{} args])))))
+        ;; _ (log/debug (format "ELT ATTRS %s" attrs))
+        ;; _ (log/debug "ELT CONTENT " content)
+        ;; [attribs contents] (parse-elt-args tag (or attrs {}) (or content '()))
+        ;; [attribs contents] (do (log/debug (format "FIRST CONTENTS %s" (first contents)))
+        ;;                        (if (map? (first contents))
+        ;;                          (parse-elt-args tag
+        ;;                           (merge attribs (first contents)) (rest contents))
+        ;;                          [attribs contents]))
+        ;; _ (log/debug "ELEMENT ATTRIBS: " attribs)
+        ;; _ (log/debug "Element content: " content)
+        e (Element. tag (or attrs {}) (or content '()))]
         ;; e (if (= (type attrs) miraj.co-dom.Element)
         ;;     (Element. tag {} (remove nil? (apply list attrs content)))
         ;;     (if (map? attrs)
         ;;       (Element. tag (or attrs {}) (flatten (remove nil? content)))
         ;;       (Element. tag {} (remove nil? (apply list attrs)))))]
-    #_(println "E: " e)
+    ;; (log/debug "NODE: " e)
     e))
 
 (defn cdata [content]
@@ -1414,7 +1544,7 @@
     (if (:with-xml-declaration opts)
       (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
     (doseq [event (flatten-elements [e])]
-      (do (log/trace "event: " event)
+      (do ;; (log/trace "event: " event)
           (emit-event event stream-writer writer)))
     ;; (.writeEndDocument stream-writer)
     writer))
@@ -1493,7 +1623,7 @@
                       func#)))
           f (eval func)])))
 
-(defn make-void-elt-fns
+#_(defn make-void-elt-fns
   [tags]
   ;; (log/trace "make-void-elt-fns " tags) ;; (type tags))
   (doseq [tag tags]
@@ -1519,7 +1649,7 @@
                           func#))))))
           f (eval func)])))
 
-(defn make-meta-tag-fns
+#_(defn make-meta-tag-fns
   [rules]
   ;; (log/trace "make-meta-tag-fns " rules) ;; (type rules))
   (let [meta-name (first rules)
@@ -1659,245 +1789,30 @@
 ;;    vectors map clj value to html value, e.g. [true "yes"]
 ;;    quoted vals represent type, plus translate to <link> instead of <meta>
 
-(def mobile-meta-tags
-  {:mobile {:agent ^:compound {:format #{:wml :xhtml :html5}
-                               :url :_}
-            :web-app-capable [true "yes"]}})
-
-(def apple-meta-tags
-  ;; https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html
-  {:apple {:itunes-app :_
-           :mobile-web-app {:capable [true "yes"]
-                            :status-bar-style #{:default :black :black-translucent}
-                            :title :string}
-           :touch {:icon ^:compound {:uri :uri :sizes :sizes}
-                   :startup-image :image}
-                   ;; apple-touch-fullscreen :_ ;; "not needed anymore"
-           :format-detection {:disable "telephone=no"}}})
-
-(def ms-meta-tags
-  {:ms {:config :uri
-        :navbutton-color :color
-        :notification {:?frequency #{30 60 360 720 1440}
-                       :?cycle #{0 1 2 3 4 5 6 7}
-                       :uri :uri
-                       :?uris [:uri] ;; up to 5 total
-                       }
-        :square-70x70-logo :uri
-        :square-150x150-logo :uri
-        :square-310x310-logo :uri
-        :starturl :uri
-        :task {:name :string :action-uri :uri :icon-uri :uri
-               :window-type #{:tab :self :window}}
-        :tile-color :color
-        :tile-image :uri
-        :tooltip :string
-        :tap-highlight :no
-        :wide-310x150-logo :uri
-        :window {:width :pixels, :height :pixels}
-        ;; other ms metas https://msdn.microsoft.com/library/dn255024(v=vs.85).aspx
-        :ms-pinned ^:nonstandard {:allow-domain-api-calls :bool
-                                  :allow-domain-meta-tags :bool
-                                  :badge {:frequency #{30 60 360 720 1440}
-                                          :polling-uri :uri}
-                                  :start-url :uri
-                                  :task-separator :_}}})
-
-(def twitter-meta-tags
-  )
-
-;; https://www.w3.org/TR/html5/document-metadata.html#standard-metadata-names
-(def html5-meta-attribs-standard
-  #:html{:charset :encoding-decl   ;; :content is implicit as value of map entry
-         ;; standard vals for name attrib
-         :application-name :string
-         :author :string
-         :description :string
-         :generator :string
-         :keywords :tokens})
-
-(def html5-pseudo-meta-attribs
-  #:html{:title 'FIXME
-         :base  'FIXME})
-
-(def html5-meta-attribs-extended
-   ;; extended name attribs https://wiki.whatwg.org/wiki/MetaExtensions
-  {:viewport ^:compound {:width #{:auto :device :pixels}
-                         :height #{:auto :device :pixels}
-                         :scale {:initial :number
-                                 :minimum :number
-                                 :maximum :number}
-                         :user-scalable :boolean}
-   ;; dublin core
-   :dc {:created :_, :creator :_} ;; etc.
-   :dc-terms {:created :_, :creator :_} ;; etc.
-   :fragment "!"
-   :geo {:position :geocoord, :country :iso3166-1} ;; etc.
-   :referrer #{:no-referrer :no-referrer-when-downgrade
-               :origin :origin-when-cross-origin
-               :unsafe-url}
-   :revision :_
-   :theme-color :color
-   :twitter {:card :_
-             :domain :_
-             :url :_
-             :title :_
-             :description :_
-             ;; etc.
-             }})
-
-(def html5-link-meta
-  ;; link elements treated as meta-data
- {:icon ^:compound {:uri :uri :sizes :sizes}
-  :manifest :uri})
-
-(def html5-miraj-meta-attribs
-  {:platform (merge apple-meta-tags ms-meta-tags mobile-meta-tags)})
-
-(def html5-meta-attribs
-  (merge {} html5-global-attrs
-         html5-meta-attribs-standard
-         html5-meta-attribs-extended
-         html5-pseudo-meta-attribs
-         html5-miraj-meta-attribs
-         html5-link-meta))
-         ;; apple-meta-tags ms-meta-tags))
-
-(defn do-viewport
-  [tag key val ruleset]
-      ;; :viewport {:width :device
-      ;;        :scale {:initial "1.0" :min "1.0"}
-      ;;        :user-scalable true}
-  ;; (println "do-viewport: " tag " | " key "|" val "|" ruleset)
-  (let [w (:width val)
-        width (str "width=" (if (= :device w) "device-width" w))
-        initial-scale (str "initial-scale=" (get-in val [:scale :initial]))
-        min-scale (str "minimum-scale=" (get-in val [:scale :min]))
-        max-scale (str "maximum-scale=" (get-in val [:scale :max]))
-        user-scalable (str "user-scalable=" (if (:user-scalable val) "yes" "no"))
-        content (str/join ", " [width initial-scale min-scale max-scale user-scalable])]
-    (element :meta {:name "viewport" :content content})))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;  handle HTML meta elements
-;;  http://w3c.github.io/html/document-metadata.html#the-meta-element
-
-;; TODO: migrate to separate miraj.html/meta library, like miraj.html/pragma
-
-(defn apply-meta-rule
-  [tag key val ruleset]
-  ;; (println (str "APPLY META RULE: " tag " | " key " | " val " | " ruleset))
-  (condp = key
-    :viewport (do-viewport tag key val ruleset)
-    (let [this-tag (if (= :ms key) "msapplication" (subs (str key) 1))
-          result (for [[k v] val]
-                   (do ;;(println "key: " k ", val: " v)
-                       (if-let [rule (get ruleset k)]
-                         (let [k-tag (subs (str k) 1)]
-                           ;; (println "rule: " rule)
-                           (cond
-                             (keyword? rule)
-                             (do ;;(println "meta keyword rule: " k ", " val ": " rule)
-                                 (let [val-param (get val k)
-                                       nm (if (= "platform-" tag)
-                                            (str this-tag "-" k-tag)
-                                            (str tag this-tag "-" k-tag))
-                                       elt (condp = rule
-                                             :color (element :meta {:name nm
-                                                                    :content (str val-param)})
-                                             :boolean (element :meta {:name nm
-                                                                      :content (str val-param)})
-                                             :number (element :meta {:name nm
-                                                                     :content (str val-param)})
-                                             :pixels (element :meta {:name nm
-                                                                     :content (str val-param)})
-                                             :string (element :meta {:name nm
-                                                                     :content (str val-param)})
-                                             :sizes (element :meta {:name nm
-                                                                    :content (str val-param)})
-                                             :uri (element :meta {:name nm
-                                                                  :content (str val-param)})
-                                             :_ (element :meta {:name nm
-                                                                :content (str val-param)})
-                                             ;; :tokens
-                                             )]
-                                   ;;(log/trace "elt: " elt)
-                                   elt))
-
-                             (map? rule) (do ;;(println "meta map key: " k)
-                                             ;; (println "meta map val: " (get val k))
-                                             ;; (println "rule: " rule)
-                                             ;; (println "tag: " tag)
-                                             ;; (println "this-tag: " this-tag)
-                                             (if (:compound (clojure.core/meta rule))
-                                               (do
-                                                   (let [nm (if (= "platform-" tag)
-                                                              (str this-tag "-" k-tag)
-                                                              (str tag this-tag "-" k-tag))
-                                                         content (str/join
-                                                                  "; " (for [[k v] (get val k)]
-                                                                         (str (subs (str k) 1)
-                                                                              "="
-                                                                              (if (keyword? v)
-                                                                                (subs (str v) 1)
-                                                                                (str v)))))]
-                                                 (element :meta {:name nm :content content})))
-                                               (apply-meta-rule
-                                                (if (= this-tag :platform)
-                                                  ""
-                                                  (str this-tag "-"))
-                                                  k (get val k) rule)))
-
-                             (set? rule)
-                             (do ;;(println "meta set rule: " k rule)
-                                 (let [val-param (get val k)]
-                                   ;; (println "val: " val-param)
-                                   (if (contains? rule val-param)
-                                     (let [nm (str tag this-tag "-" k-tag)
-                                           content (subs (str val-param) 1)]
-                                       (element :meta {:name nm :content content}))
-                                     (throw (Exception. (str "META: unrecognized enum option: "
-                                                             key " {" k " " v"}"))))))
-
-                             (vector? rule)
-                             (do ;;(log/trace "meta vector rule: " k ", " val ": " rule)
-                               (let [v (val k)]
-                                 ;;(log/trace "found val: " v)
-                                 (if (= v (first rule))
-                                   (let [nm (if (= "platform-" tag)
-                                              (str this-tag "-" k-tag)
-                                              (str tag this-tag "-" k-tag))
-                                         content (second rule)]
-                                     ;;(log/trace nm  "=\"" content "\"")
-                                     (element :meta {:name nm :content content}))
-                                   (throw (Exception. (str "META: unrecognized option: " key " {" k " " v"}"))))))
-                             :else (throw (Exception.
-                                           (str "META: unrecognized option type: "
-                                                key " {" k " " v"}" (type rule)))))))))]
-      (doall result)
-    result)))
-
 (defn get-metas
   [metas]
   ;; (println "HTML5-METAS " (keys html5-meta-attribs))
-  ;; (log/debug "HTML5 META ATTRIBS: " hmtl5-meta-attribs)
-  (let [html-tags (filter (fn [[k v]] (= "html" (namespace k))) metas)
-        ;; _ (log/debug "HTML TAGS: " html-tags)
+  (log/debug "GET-META " metas)  ;; HTML5 META ATTRIBS: " hmtl5-meta-attribs)
+  (let [html-tags (into {} (filter (fn [[k v]] (= "miraj.html" (namespace k))) metas))
+        _ (log/debug "HTML TAGS: " html-tags)
         ms (for [[tag val] html-tags]
-             (let [rule (get html5-meta-attribs tag)]
-               ;; (println "META: " tag (pr-str val) " RULE: " rule)
-               (if (nil? rule) (throw (Exception. (str "unknown meta name: " (str tag)))))
-               (if (keyword? rule)
+             (do
+             ;;(let [rule (get html5-meta-attribs tag)]
+               (log/debug "META: " tag (pr-str val)) ;; " RULE: " rule)
+               ;;(if (keyword? rule)
                  ;; FIXME: validation
-                 (let [m (element :meta {:name (name tag) #_(subs (str tag) 1) :content (str val)})]
-                   ;; (println "META ELT: " m)
-                   m)
+                 ;; (let [m (element :meta
+                 ;;                   {:name (name tag)
+                 ;;                         #_(subs (str tag) 1)
+                 ;;                         :content (str val)})]
+                 ;;   ;; (println "META ELT: " m)
+                 ;;   m)
                  ;; FIXME: hack for pseudo-metas
-                 (if (= :html/title tag)
+                 (if (= :miraj.html/title tag)
                    (element :title val)
-                   (if (= :html/base tag)
-                     (element :base {:href val})
-                     (apply-meta-rule "" tag val rule))))))]
+                   (if (= :miraj.html/base tag)
+                     (element :base {:href val})))))]
+;;                     (apply-meta-rule "" tag val rule)))))]
                ;; (case tag
                ;;   :apple (let [apple (apply-meta-rule "" tag val rule)]
                ;;            #_(log/trace "APPLE: " apple) apple)
@@ -1912,7 +1827,7 @@
     ;; (println "METAS: " ms)
     ms))
 
-(defn platform
+#_(defn platform
   [{:keys [apple ms mobile]}]
   ;; (println "apple: " apple)
   ;; (println "ms: " ms)
@@ -2613,4 +2528,4 @@
        #_(serialize result#)
        result#)))
 
-;;(println "loaded miraj.co-dom")
+(println "loaded miraj.co-dom")
