@@ -1,9 +1,81 @@
 (ns test_codom
-  (:refer-clojure :exclude [import])
-  (:require [miraj.core :as miraj]
-            [miraj.co-dom :as x]
-            [miraj.html :as h]
+  ;; (:refer-clojure :exclude [import])
+  (:require [miraj.co-dom :refer :all]
             :reload))
+
+(element :div {'@lname :name})
+(element :div {:lname :$name})
+
+(element :meta {:name "description"
+                :content "miraj.co-dom test"})
+
+
+;;;;;;;;;;;;;;;; special keyword attribs:  :#foo  :.foo  :!foo  :$foo  :@foo
+
+(element :div :#foo)
+(element :div :.bar.baz)
+
+(element :div :!centered)
+(serialize (element :div :!centered))
+
+(element :div {:$color "blue"})
+(serialize (element :div {:$hover {:color "blue"}}))
+
+(element :div {:@lname "Smith"})
+
+
+(element :div :#foo.bar.baz!centered)
+
+(element :div :#foo :.bar :.baz :!centered)
+
+(element :div :#foo :.bar :.baz :!centered {:$color "blue"})
+
+(element :div :#foo.bar.baz {:$hover {:background "blue"}})
+
+(element :div :#foo :.bar :.baz :!centered {:$hover {:background "blue"}})
+
+
+;;;;;;;;;;;;;;;;  binding annotations
+
+;; property bindings
+(serialize (element :div {:lname :name.last}))
+(serialize (element :div {:lname 'name.last}))
+
+(element :div {:lname '@name})
+(element :div {'@lname :name})
+
+;;  attribute bindings
+(serialize (element :div {'@lname :name.last}))
+(serialize (element :div {:lname 'name.last}))
+
+;;  content bindings
+(serialize (element :div :lname))
+(serialize (element :div :name.last ", " :name.first))
+
+;; void elements
+(element :link {:rel "stylesheet" :href "foo/bar.css"})
+
+;; nesting
+
+(element :chapter (element :section))
+
+
+;; loops etc.
+
+(pprint (element :head
+         (for [i (range 0 3)]
+           (element :link {:rel "import" :href (str "foo" i ".html")}))))
+
+
+;;;;;;;;;;;;;;;; templating
+
+(defn frag [lname fname]
+  (element :div
+           (element :span "Hello there, ")
+           (element :span fname " ")
+           (element :span lname "!")))
+
+(pprint (frag "Smith", "John"))
 
 ;; (def doc (element :html
 ;;                   (element :head
@@ -21,38 +93,3 @@
 ;;                     {:$background-color "red"
 ;;                      :bar 99}))
 
-;;(remove-ns 'miraj.co-dom)
-;;(remove-ns 'test_codom)
-;;(require '[miraj.co-dom :as codom] :reload :verbose)
-
-(x/pprint
- (h/html
- (h/body
-  (h/div :#myid.foo {:$hover {:content "afdeagd"}}
-         (h/button :!foobar))
-  (h/div
-   (h/span  :#myspan.foo.bar {:lname "Jones"
-                              :$hover {:background-color "green"}}
-            :!centered "hello"))))
-)
-
-;;(ns-unalias *ns* 'codom)
-
-;; (x/pprint
-;;  (h/div
-;;   (h/span :.centered {:$color "green"
-;;                       :foo 99
-;;                       :$hover {:background "red" :color "blue"}
-;;                             })
-;;   )
-;;  )
-
-;; (pprint doc)
-
-;; (println (optimize :js doc))
-
-;; (pprint (optimize :js doc))
-
-;; (co-compile "resources/footest.html"
-;;             (optimize :js doc)
-;;             :pprint)

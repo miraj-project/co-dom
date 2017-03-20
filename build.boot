@@ -4,15 +4,22 @@
 (set-env!
  :resource-paths #{"src/main/clj"}
  :source-paths #{"src/test/clj"}
+
  :dependencies   '[[org.clojure/clojure RELEASE :scope "provided"]
+                   ;; [org.clojure/clojurescript "1.7.228"]
                    [org.clojure/data.json "0.2.6"]
-                   [org.clojure/clojurescript "1.7.228"]
                    [clj-time "0.11.0"]
+                   [org.clojure/tools.logging "0.3.1" :scope "compile"]
+                   [org.slf4j/slf4j-log4j12 "1.7.1"]
+                   [log4j/log4j "1.2.17" :exclusions [javax.mail/mail
+                                                      javax.jms/jms
+                                                      com.sun.jmdk/jmxtools
+                                                      com.sun.jmx/jmxri]]
 
                    ;; testing only
-                   [miraj/core "0.1.0-SNAPSHOT" :scope "test"]
+                   ;; [miraj/core "0.1.0-SNAPSHOT" :scope "test"]
 ;                   [miraj/html "5.1.0-SNAPSHOT" :scope "test"]
-                   [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
+                   ;; [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
                    ;; [miraj.polymer/iron "1.2.3-SNAPSHOT" :scope "test"]
 
                    [samestep/boot-refresh "0.1.0"]
@@ -43,9 +50,7 @@
 (deftask build
   "build"
   []
-  (comp (watch)
-        (notify :audible true)
-        (aot)
+  (comp ;; (aot)
         (pom)
         (jar)
         (install)
@@ -57,13 +62,15 @@
   (comp (repl)
         (watch)
         (notify :audible true)
-        #_(refresh)))
-        ;; (pom)
-        ;; (jar)
-        ;; (install)))
+        #_(refresh)
+        (pom)
+        (jar)
+        (target)
+        (install)))
 
 (deftask check
-  "test"
-  []
-  (comp (aot)
-        (test :exclude #"data.xml.*")))
+  "test:"
+  [n namespaces  NS  #{sym}  "Compile all miraj vars in namespace NS."]
+  (set-env! :source-paths #{"test"})
+  ;;(set-env! :dependencies #(conj % '[miraj.polymer.paper "1.2.3-SNAPSHOT" :scope "test"]))
+  (test :namespaces namespaces :exclude #"data.xml.*"))

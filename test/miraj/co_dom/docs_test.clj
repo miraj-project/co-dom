@@ -33,10 +33,10 @@
 
 (deftest ^:docs optimize-1
   (testing "JS optimizer moves <script> elements from <head> to bottom of <body>."
-    (is (= (optimize (normalize doc))
+    (is (= (xsl-optimize-js doc)) ;; (normalize doc))
            #miraj.co_dom.Element{:tag :html, :attrs {}, :content (#miraj.co_dom.Element{:tag :head, :attrs {}, :content (#miraj.co_dom.Element{:tag :meta, :attrs {:name "charset", :content "utf-8"}, :content ()} #miraj.co_dom.Element{:tag :meta, :attrs {:application-name "co-dom test"}, :content ()})} #miraj.co_dom.Element{:tag :body, :attrs {}, :content (#miraj.co_dom.Element{:tag :h1, :attrs {}, :content ("Hello world")} #miraj.co_dom.Element{:tag :script, :attrs {:src "foo/bar.css"}, :content ()} #miraj.co_dom.Element{:tag :script, :attrs {:src "foo/baz.css"}, :content ()})})}))
 
-    (is (= (serialize (optimize (normalize doc)))
+    (is (= (serialize (xsl-optimize-js)) ; (normalize doc)))
            "<!doctype html><html><head><meta name=\"charset\" content=\"utf-8\"><meta application-name=\"co-dom test\"></head><body><h1>Hello world</h1><script src=\"foo/bar.css\"></script><script src=\"foo/baz.css\"></script></body></html>"))
-    #_(pprint (optimize :js (normalize doc)))))
+    #_(pprint (optimize :js (normalize doc))))
 

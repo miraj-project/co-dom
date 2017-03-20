@@ -24,7 +24,6 @@
             ;; [cljs.closure :as cc]
             ;; [cljs.env :as env]
             [clojure.tools.logging :as log :only [trace debug error info]]
-            ;; [miraj.html :as html]
             )
   (:import [java.io ByteArrayInputStream StringReader StringWriter]
            [javax.xml.stream XMLInputFactory
@@ -309,7 +308,9 @@
 
    "<xsl:template match='script/text()' priority='999'>"
      "<xsl:text disable-output-escaping='yes'>"
+       "<xsl:text>&#x0A;</xsl:text>"
        "<xsl:value-of select='.'/>"
+       "<xsl:text>&#x0A;</xsl:text>"
      ;; "<xsl:copy>"
        ;; "<xsl:apply-templates select='@*|node()'/>"
      ;; "</xsl:copy>"
@@ -317,20 +318,17 @@
    "</xsl:template>"
 
    "<xsl:template match=\"@*\">"
-   ;; "<xsl:message>YYYYYYYYYYYYYYYY</xsl:message>"
    ;; Handle HTML boolean attributes
+   ;; If the attribute is present, its value must either be the empty
+   ;; string or a value that is an ASCII case-insensitive match for
+   ;; the attribute's canonical name, with no leading or trailing
+   ;; whitespace. The values "true" and "false" are not allowed on
+   ;; boolean attributes.
+   ;; "<xsl:message>Attr: <xsl:value-of select='name()'/> = <xsl:value-of select='.'/></xsl:message>"
      "<xsl:choose>"
-       ;; "<xsl:when test='name() = .'>"
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       ;; "<xsl:when test='. = concat(\":\", name())'>"
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       (str "<xsl:when test='. = \"" miraj-boolean-tag "\"'>")
+     ;; {:foo "foo"}
+       "<xsl:when test='name() = .'>"
+       ;; FIXME: test for case-insensitive match to canonical name
          "<xsl:attribute name='{name()}'>"
            miraj-boolean-tag
          "</xsl:attribute>"
@@ -340,6 +338,17 @@
            miraj-boolean-tag
          "</xsl:attribute>"
        "</xsl:when>"
+       ;; "<xsl:when test='. = concat(\":\", name())'>"
+       ;;   "<xsl:attribute name='{name()}'>"
+       ;;     miraj-boolean-tag
+       ;;   "</xsl:attribute>"
+       ;; "</xsl:when>"
+       ;; (str "<xsl:when test='. = \"" miraj-boolean-tag "\"'>")
+       ;;   "<xsl:attribute name='{name()}'>"
+       ;;     miraj-boolean-tag
+       ;;   "</xsl:attribute>"
+       ;; "</xsl:when>"
+       ;; {:foo ""}
      ;; Handle PSEUDO attributes
        "<xsl:when test='name() = \"" (name miraj-pseudo-kw) "\"'>"
        ;; omit the attribute
@@ -707,7 +716,7 @@
                (let [s (serialize :xml s)]
                  (reset! mode fmt)
                  s)))
-        ;; _ (log/debug (format "SERIALIZED %s" ml))
+        _ (log/debug (format "SERIALIZED %s" ml))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -827,7 +836,7 @@
       (= s "")))
 
 ;; test
-(defn body
+#_(defn body
   ""
   [page-var & args]
   (println "BODY: " page-var)
@@ -890,11 +899,16 @@
     ;;   (Event. :void-element (:tag element) (:attrs element) nil)
       (Event. :start-element (:tag element) (:attrs element) nil)) ;)
   (next-events [element next-items]
-    (do #_(println "NEXT evt: " (:tag element))
+    (do ;(log/debug "NEXT evt: " (:tag element))
+        ;(log/debug "NEXT element:" element)
+        ;(log/debug "NEXT items:" next-items)
+        ;(log/debug "NEXT content:" (:content element))
         ;(if (= (:tag element) :link)
          ; next-items
-          (cons (:content element)
-                (cons (Event. :end-element (:tag element) nil nil) next-items))))
+        (let [result (cons (:content element)
+                           (cons (Event. :end-element (:tag element) nil nil) next-items))]
+          ;(log/debug "NEXT-EVENTS RESULT:" result)
+          result)))
 
   Event
   (gen-event [event] event)
@@ -905,6 +919,16 @@
   (gen-event [coll]
     (println "GEN-EVENT PAM: " coll))
   (next-events [coll next-items])
+
+  ;; literal content of script elt:
+  clojure.lang.PersistentList
+  (gen-event [l]
+    (log/debug "GEN-EVENT PERSISTENT LIST: " l)
+    (Event. :chars nil nil (str/join "\n" l)))
+    ;; (Event. :cdata nil nil l))
+  (next-events [_ next-items]
+    (log/debug "NEXT-EVENTS PERSISTENT LIST: " next-items)
+    next-items)
 
   clojure.lang.Sequential
   (gen-event [coll]
@@ -987,14 +1011,16 @@
     next-items))
 
 (defn flatten-elements [elements]
-  ;; (prn "flatten-elements:")
+  ;; (log/debug "FLATTEN-elements:" elements)
   ;; (prn elements)
   (when (seq elements)
     (lazy-seq
      (let [e (first elements)]
+       ;; (log/debug "FLATten:" (seq e))
        (let [f (gen-event e)]
-       (cons f
-             (flatten-elements (next-events e (rest elements)))))))))
+         ;; (log/debug "GENNED EVT:" f)
+         (cons f
+               (flatten-elements (next-events e (rest elements)))))))))
 
 (declare parse-elt-args)
 
@@ -1092,7 +1118,8 @@
 
 (defn get-specials-map
   [tag specials]
-  (let [sm (into {} (for [special specials] (validate-kw-attrib tag special)))]
+  (let [sm (apply merge-with (fn [a b] (str/join " " [a b]))
+                  (for [special specials] (validate-kw-attrib tag special)))]
     ;; (log/debug (format "SPECIALS MAP %s" sm))
     sm))
 
@@ -1108,27 +1135,42 @@
     ;; (log/debug (format "GET-PSEUDO %s" (seq style)))
     (str/join " " style)))
 
+(defn- attr-sym?
+  [arg]
+  (if (list? arg)
+    (let [fst (first arg)]
+      (log/debug (format "First %s %s" fst (type fst) (= 'clojure.core/deref fst)))
+      (if (= fst 'clojure.core/deref)
+        (do (log/debug (format "deref"))
+            true)
+        false))))
+
 (defn- normalize-attributes
   [tag attrs content]
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  ;; (log/debug (format "VALIDATE-ATTRS %s" attrs))
+  ;; (log/debug (format "NORMALIZE-attributes %s" attrs))
   (if (instance?  miraj.co_dom.Element attrs)
     (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
     (let [other-attrs (apply hash-map
                              (flatten (filter (fn [[k v]]
-                                                (if (not (keyword? k))
+                                                ;; (log/debug (format "KV %s %s" k v))
+                                                (if (not (or (keyword? k) (attr-sym? k)))
                                                   (throw (Exception.
                                                           (format "Only keyword attr names supported: %s is %s"
                                                                   k (type k)))))
                                                 (or (= k miraj-pseudo-kw)
+                                                    (and (list? k) (= 'clojure.core/deref
+                                                                      (first k)))
                                                     (let [attr-ns (namespace k)
                                                           attr-name (name k)
                                                           c (get attr-name 0)]
                                                       (java.lang.Character/isLetter c))))
-                                              (dissoc attrs :content))))
+                                              ;; FIXME: why did we dissoc :content?
+                                              ;; (dissoc attrs :content))))
+                                              attrs)))
           ;; _ (log/debug (format "OTHER Attrs  %s" other-attrs))
 
           pseudo-attrs (apply hash-map
@@ -1163,25 +1205,7 @@
                                     (for [[k v] style-attrs] (str (subs (name k) 1) ":" v ";")))})
           ;; _ (log/debug (format "STYLE  %s" style))
           valids (merge style other-attrs pseudo)
-;; valids (merge-with concat (for [[k v] attrs]
-;;                    (if (not (keyword? k))
-;;                      (throw (Exception.
-;;                              (format "Only keyword attr names supported: %s is %s"
-;;                                      k (type k))))
-;;                      (let [attr-ns (namespace k)
-;;                            attr-name (name k)
-;;                            c (get attr-name 0)]
-;;                        ;; FIXME: (if (contains? html5-attrs attr-name) ok else fail
-;;                        (if (java.lang.Character/isLetter c)
-;;                          (do (log/debug (format "CHAR %s" c))
-;;                              {k v})
-;;                          (if (= c \$)
-;;                            (let [nm (subs (name attr-name) 1)
-;;                                  style (str nm ":" v ";")]
-;;                            {:style style})
-;;                            (throw (Exception.
-;;                                    (format "Invalid attribute name: %s" (name k))))))))))
-                           ]
+          ]
       ;; (log/debug (format "VALIDS %s" valids))
       valids)))
 
@@ -1227,7 +1251,7 @@
 
 (defn element
   [tag & args]
-  ;; (log/debug "ELEMENT: " tag " ARGS: " args)
+  ;; (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
   (let [;; args (first args)
 
         special-attrs (filter #(special-kw? %) args)
@@ -1531,10 +1555,10 @@
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   [e ^java.io.Writer writer & {:as opts}]
-  ;; (println "emit: " e " OPTS: " opts)
-  (let [^javax.xml.stream.XMLStreamWriter stream-writer
-        (-> (javax.xml.stream.XMLOutputFactory/newInstance)
-            (.createXMLStreamWriter writer))]
+  ;; (log/debug "EMIT: " e " OPTS: " opts)
+  (let [^javax.xml.stream.XMLStreamWriter
+        stream-writer (-> (javax.xml.stream.XMLOutputFactory/newInstance)
+                          (.createXMLStreamWriter writer))]
     (when (instance? java.io.OutputStreamWriter writer)
       (check-stream-encoding writer (or (:encoding opts) "UTF-8")))
 
@@ -1543,11 +1567,13 @@
     ;;       (.writeDTD stream-writer "<!doctype html>")))
     (if (:with-xml-declaration opts)
       (.writeStartDocument stream-writer (or (:encoding opts) "UTF-8") "1.0"))
-    (doseq [event (flatten-elements [e])]
-      (do ;; (log/trace "event: " event)
-          (emit-event event stream-writer writer)))
-    ;; (.writeEndDocument stream-writer)
-    writer))
+    (let [events (flatten-elements [e])]
+      ;; (log/trace "FLATTENED EVENTS:" events)
+      (doseq [event events]
+        (do ;; (log/trace "event: " event)
+            (emit-event event stream-writer writer)))
+      ;; (.writeEndDocument stream-writer)
+      writer)))
 
 #_(defn emit-str
   "Emits the Element to String and returns it.
@@ -1789,43 +1815,43 @@
 ;;    vectors map clj value to html value, e.g. [true "yes"]
 ;;    quoted vals represent type, plus translate to <link> instead of <meta>
 
-(defn get-metas
-  [metas]
-  ;; (println "HTML5-METAS " (keys html5-meta-attribs))
-  (log/debug "GET-META " metas)  ;; HTML5 META ATTRIBS: " hmtl5-meta-attribs)
-  (let [html-tags (into {} (filter (fn [[k v]] (= "miraj.html" (namespace k))) metas))
-        _ (log/debug "HTML TAGS: " html-tags)
-        ms (for [[tag val] html-tags]
-             (do
-             ;;(let [rule (get html5-meta-attribs tag)]
-               (log/debug "META: " tag (pr-str val)) ;; " RULE: " rule)
-               ;;(if (keyword? rule)
-                 ;; FIXME: validation
-                 ;; (let [m (element :meta
-                 ;;                   {:name (name tag)
-                 ;;                         #_(subs (str tag) 1)
-                 ;;                         :content (str val)})]
-                 ;;   ;; (println "META ELT: " m)
-                 ;;   m)
-                 ;; FIXME: hack for pseudo-metas
-                 (if (= :miraj.html/title tag)
-                   (element :title val)
-                   (if (= :miraj.html/base tag)
-                     (element :base {:href val})))))]
-;;                     (apply-meta-rule "" tag val rule)))))]
-               ;; (case tag
-               ;;   :apple (let [apple (apply-meta-rule "" tag val rule)]
-               ;;            #_(log/trace "APPLE: " apple) apple)
-               ;;   :msapplication (let [ms (apply-meta-rule "msapplication" tag val rule)]
-               ;;                    #_(log/trace "MSAPP: " ms) ms)
-               ;;   :mobile (let [ms (apply-meta-rule "" tag val rule)]
-               ;;             #_(log/trace "MOBILE: " ms) ms)
-               ;;   (element :meta {:name (subs (str tag) 1)
-               ;;            :content (str val)}))))]
-    ;; force eval, for printlns
-    (doall ms)
-    ;; (println "METAS: " ms)
-    ms))
+;; (defn get-metas
+;;   [metas]
+;;   ;; (println "HTML5-METAS " (keys html5-meta-attribs))
+;;   (log/debug "GET-META " metas)  ;; HTML5 META ATTRIBS: " hmtl5-meta-attribs)
+;;   (let [html-tags (into {} (filter (fn [[k v]] (= "miraj.html" (namespace k))) metas))
+;;         _ (log/debug "HTML TAGS: " html-tags)
+;;         ms (for [[tag val] html-tags]
+;;              (do
+;;              ;;(let [rule (get html5-meta-attribs tag)]
+;;                (log/debug "META: " tag (pr-str val)) ;; " RULE: " rule)
+;;                ;;(if (keyword? rule)
+;;                  ;; FIXME: validation
+;;                  ;; (let [m (element :meta
+;;                  ;;                   {:name (name tag)
+;;                  ;;                         #_(subs (str tag) 1)
+;;                  ;;                         :content (str val)})]
+;;                  ;;   ;; (println "META ELT: " m)
+;;                  ;;   m)
+;;                  ;; FIXME: hack for pseudo-metas
+;;                  (if (= :miraj.html/title tag)
+;;                    (element :title val)
+;;                    (if (= :miraj.html/base tag)
+;;                      (element :base {:href val})))))]
+;; ;;                     (apply-meta-rule "" tag val rule)))))]
+;;                ;; (case tag
+;;                ;;   :apple (let [apple (apply-meta-rule "" tag val rule)]
+;;                ;;            #_(log/trace "APPLE: " apple) apple)
+;;                ;;   :msapplication (let [ms (apply-meta-rule "msapplication" tag val rule)]
+;;                ;;                    #_(log/trace "MSAPP: " ms) ms)
+;;                ;;   :mobile (let [ms (apply-meta-rule "" tag val rule)]
+;;                ;;             #_(log/trace "MOBILE: " ms) ms)
+;;                ;;   (element :meta {:name (subs (str tag) 1)
+;;                ;;            :content (str val)}))))]
+;;     ;; force eval, for printlns
+;;     (doall ms)
+;;     ;; (println "METAS: " ms)
+;;     ms))
 
 #_(defn platform
   [{:keys [apple ms mobile]}]
@@ -2322,10 +2348,10 @@
          ;; (println "IMPORTed: " reqs#)
          reqs#))))
 
-(defn meta-map
-  [m]
-  ;; (println "meta-map: " m)
-  (get-metas m))
+;; (defn meta-map
+;;   [m]
+;;   ;; (println "meta-map: " m)
+;;   (get-metas m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  miraj-specific elements
@@ -2527,5 +2553,12 @@
        ;; (println "CO-CTOR: " result#)
        #_(serialize result#)
        result#)))
+
+(defn js
+  [form]
+  (log/debug (format "reading JS %s" form))
+  #_(str "#js "form)
+  (list 'clj->js form))
+
 
 (println "loaded miraj.co-dom")

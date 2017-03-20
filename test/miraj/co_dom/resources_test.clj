@@ -14,16 +14,18 @@
             [clojure.test :refer :all]
             [miraj.co-dom :refer :all]))
 
-(pprint (require '[miraj.polymer.paper :as paper :refer [button]]))
+;; FIXME: require, import, etc. are miraj.core capabilities, not co-dom ones
 
-(deftest ^:resources res-1
-  (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
-    (is (= e
-           "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))))
+;; (pprint (require '[miraj.polymer.paper :as paper :refer [button]]))
 
-(deftest ^:resources res-2
-  (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
-    (is (= e
-           "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))
-    (is (= (serialize (paper/button)) "<paper-button></paper-button>"))))
+;; (deftest ^:resources res-1
+;;   (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
+;;     (is (= e
+;;            "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))))
+
+;; (deftest ^:resources res-2
+;;   (let [e (serialize (require '[miraj.polymer.paper :as paper :refer [button]]))]
+;;     (is (= e
+;;            "<link rel=\"import\" href=\"bower_components/paper-button/paper-button.html\">"))
+;;     (is (= (serialize (paper/button)) "<paper-button></paper-button>"))))
 
