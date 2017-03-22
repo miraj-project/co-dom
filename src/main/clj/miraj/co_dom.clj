@@ -716,7 +716,7 @@
                (let [s (serialize :xml s)]
                  (reset! mode fmt)
                  s)))
-        _ (log/debug (format "SERIALIZED %s" ml))
+        ;; _ (log/debug (format "SERIALIZED %s" ml))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -1031,6 +1031,7 @@
 
 (defn- attr-map?
   [m]
+  ;; (log/debug (format "ATTR-MAP? %s %s" m (instance? miraj.co_dom.Element m)))
   (and (map? m)
        (not (instance? miraj.co_dom.Element m))))
 
@@ -1139,9 +1140,9 @@
   [arg]
   (if (list? arg)
     (let [fst (first arg)]
-      (log/debug (format "First %s %s" fst (type fst) (= 'clojure.core/deref fst)))
+      ;; (log/debug (format "First %s %s" fst (type fst) (= 'clojure.core/deref fst)))
       (if (= fst 'clojure.core/deref)
-        (do (log/debug (format "deref"))
+        (do ;; (log/debug (format "deref"))
             true)
         false))))
 
@@ -1150,7 +1151,7 @@
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  ;; (log/debug (format "NORMALIZE-attributes %s" attrs))
+  ;; (if *verbose* (log/debug (format "NORMALIZE-attributes %s %s" tag attrs)))
   (if (instance?  miraj.co_dom.Element attrs)
     (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
@@ -1251,7 +1252,8 @@
 
 (defn element
   [tag & args]
-  ;; (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
+  (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
+  (log/debug (format "ARGS %s" args))
   (let [;; args (first args)
 
         special-attrs (filter #(special-kw? %) args)
@@ -1262,12 +1264,15 @@
         ;; _ (log/debug (format "Specials MAP %s" specials-map))
 
         content (filter (fn [arg]
+                          (log/debug (format "filtering %s" arg))
                           (and (not (special-kw? arg))
                                (not (attr-map? arg))))
                         args)
-        ;; _ (log/debug (format "Content %s" (seq content)))
+        _ (log/debug (format "Content %s" (seq content)))
 
-        attr-map (normalize-attributes tag (into {} (filter attr-map? args)) content)
+        attr-map (into {} (filter attr-map? args))
+        _ (log/debug (format "ATTR-MAP %s" attr-map))
+        attr-map (normalize-attributes tag attr-map content)
         ;; _ (log/debug (format "Attr-map %s" attr-map))
 
         ids (let [c1 (:id attr-map)
