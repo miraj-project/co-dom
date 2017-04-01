@@ -1,9 +1,11 @@
 (def +project+ 'miraj/co-dom)
-(def +version+ "0.1.0-SNAPSHOT")
+(def +version+ "1.0.0-SNAPSHOT")
 
 (set-env!
  :resource-paths #{"src/main/clj"}
  :source-paths #{"src/test/clj"}
+
+ :repositories #(conj % ["clojars" {:url "https://clojars.org/repo/"}])
 
  :dependencies   '[[org.clojure/clojure RELEASE :scope "provided"]
                    ;; [org.clojure/clojurescript "1.7.228"]
@@ -42,7 +44,7 @@
  aot {:namespace #{'miraj.NSException}}
  pom  {:project     +project+
        :version     +version+
-       :description "miraj co-dom"
+       :description "Base library supporting functional HTML - see also miraj/html"
        :url         "https://github.com/miraj-project/miraj.co-dom.git"
        :scm         {:url "https://github.com/miraj-project/miraj.co-dom.git"}
        :license     {"EPL" "http://www.eclipse.org/legal/epl-v10.html"}})
