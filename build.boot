@@ -45,8 +45,8 @@
  pom  {:project     +project+
        :version     +version+
        :description "Base library supporting functional HTML - see also miraj/html"
-       :url         "https://github.com/miraj-project/miraj.co-dom.git"
-       :scm         {:url "https://github.com/miraj-project/miraj.co-dom.git"}
+       :url         "https://github.com/miraj-project/co-dom"
+       :scm         {:url "https://github.com/miraj-project/co-dom.git"}
        :license     {"EPL" "http://www.eclipse.org/legal/epl-v10.html"}})
 
 (deftask build
