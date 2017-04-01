@@ -1,4 +1,4 @@
-# Fork of data.xml.  *Modifications are on the miraj branch.*
+# Fork of data.xml version 0.0.8, used as basis of co-dom (changes on master)
 
 # data.xml
 
