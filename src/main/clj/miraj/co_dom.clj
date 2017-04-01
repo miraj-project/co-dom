@@ -326,18 +326,21 @@
    ;; boolean attributes.
    ;; "<xsl:message>Attr: <xsl:value-of select='name()'/> = <xsl:value-of select='.'/></xsl:message>"
      "<xsl:choose>"
-     ;; {:foo "foo"}
-       "<xsl:when test='name() = .'>"
-       ;; FIXME: test for case-insensitive match to canonical name
-         "<xsl:attribute name='{name()}'>"
-           miraj-boolean-tag
-         "</xsl:attribute>"
+       ;; ONLY transform PSEUDO attributes
+       "<xsl:when test='name() = \"" (name miraj-pseudo-kw) "\"'>"
+       ;; omit the attribute
        "</xsl:when>"
-       "<xsl:when test='. = \"\"'>"
-         "<xsl:attribute name='{name()}'>"
-           miraj-boolean-tag
-         "</xsl:attribute>"
-       "</xsl:when>"
+       ;; "<xsl:when test='name() = .'>"
+       ;; ;; FIXME: test for case-insensitive match to canonical name
+       ;;   "<xsl:attribute name='{name()}'>"
+       ;;     miraj-boolean-tag
+       ;;   "</xsl:attribute>"
+       ;; "</xsl:when>"
+       ;; "<xsl:when test='. = \"\"'>"
+       ;;   "<xsl:attribute name='{name()}'>"
+       ;;     miraj-boolean-tag
+       ;;   "</xsl:attribute>"
+       ;; "</xsl:when>"
        ;; "<xsl:when test='. = concat(\":\", name())'>"
        ;;   "<xsl:attribute name='{name()}'>"
        ;;     miraj-boolean-tag
@@ -349,10 +352,6 @@
        ;;   "</xsl:attribute>"
        ;; "</xsl:when>"
        ;; {:foo ""}
-     ;; Handle PSEUDO attributes
-       "<xsl:when test='name() = \"" (name miraj-pseudo-kw) "\"'>"
-       ;; omit the attribute
-       "</xsl:when>"
        "<xsl:otherwise>"
          "<xsl:copy/>"
        "</xsl:otherwise>"
@@ -923,11 +922,11 @@
   ;; literal content of script elt:
   clojure.lang.PersistentList
   (gen-event [l]
-    (log/debug "GEN-EVENT PERSISTENT LIST: " l)
+    ;; (log/debug "GEN-EVENT PERSISTENT LIST: " l)
     (Event. :chars nil nil (str/join "\n" l)))
     ;; (Event. :cdata nil nil l))
   (next-events [_ next-items]
-    (log/debug "NEXT-EVENTS PERSISTENT LIST: " next-items)
+    ;; (log/debug "NEXT-EVENTS PERSISTENT LIST: " next-items)
     next-items)
 
   clojure.lang.Sequential
@@ -1029,11 +1028,15 @@
     :$root :$nth-child :$nth-last-child :$nth-of-type :$nth-last-of-type :$first-child :$last-child :$first-of-type :$last-of-type :$only-child :$only-of-type :$empty
     :$after :$before :$first-line :$first-letter})
 
-(defn- attr-map?
+(defn attr-map?
   [m]
-  ;; (log/debug (format "ATTR-MAP? %s %s" m (instance? miraj.co_dom.Element m)))
+  ;; NB: if this file is reloaded (e.g. during dev) then (instance?
+  ;; Element m) will fail for uses of Element that have not also been
+  ;; reloaded.  So we compare classnames instead of types.
   (and (map? m)
-       (not (instance? miraj.co_dom.Element m))))
+       ;; (not (= miraj.co_dom.Element (type m)))))
+       (not (= (.getCanonicalName (class m))
+               (.getCanonicalName miraj.co_dom.Element)))))
 
 (defn- special-kw?
   [tok]
@@ -1151,7 +1154,7 @@
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  ;; (if *verbose* (log/debug (format "NORMALIZE-attributes %s %s" tag attrs)))
+  ;; (log/debug (format "NORMALIZE-attributes %s %s" tag attrs))
   (if (instance?  miraj.co_dom.Element attrs)
     (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
@@ -1252,8 +1255,8 @@
 
 (defn element
   [tag & args]
-  (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
-  (log/debug (format "ARGS %s" args))
+  ;; (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
+  ;; (log/debug (format "ARGS %s" args))
   (let [;; args (first args)
 
         special-attrs (filter #(special-kw? %) args)
@@ -1263,15 +1266,16 @@
         specials-map (get-specials-map tag special-attrs)
         ;; _ (log/debug (format "Specials MAP %s" specials-map))
 
+        attr-map (into {} (filter attr-map? args))
+        ;; _ (log/debug (format "ATTR-MAP %s" attr-map))
+
         content (filter (fn [arg]
-                          (log/debug (format "filtering %s" arg))
+                          ;; (log/debug (format "filtering %s" arg))
                           (and (not (special-kw? arg))
                                (not (attr-map? arg))))
                         args)
-        _ (log/debug (format "Content %s" (seq content)))
+        ;; _ (log/debug (format "Content %s" (seq content)))
 
-        attr-map (into {} (filter attr-map? args))
-        _ (log/debug (format "ATTR-MAP %s" attr-map))
         attr-map (normalize-attributes tag attr-map content)
         ;; _ (log/debug (format "Attr-map %s" attr-map))
 
