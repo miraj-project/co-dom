@@ -183,13 +183,15 @@
           ;; FIXME: only do polymer annotations in HTML mode
           attr-val ;;(if (= :html @mode)
                      (cond
-                       (= :rel k) (if (contains? html5-link-types
-                                                 (if (string? v) (keyword v) v))
-                                    (if (keyword? v) (subs (str v) 1) v)
-                                    (throw (Exception.
-                                            (str "Invalid link type value for rel attribute: {"
-                                                 k " " v "}; valid values are: "
-                                                 html5-link-types))))
+                       (= :rel k) (if (keyword? v) (subs (str v) 1) v)
+                       ;; (if (contains? html5-link-types
+                       ;;                           (if (string? v) (keyword v) v))
+                       ;;              (if (keyword? v) (subs (str v) 1) v)
+                       ;;              (throw (Exception.
+                       ;;                      (str "Invalid link type value for rel attribute: {"
+                       ;;                           k " " v "}; valid values are: "
+                       ;;                           html5-link-types))))
+
                        (keyword? v)
                        (do ;;(println "KEYWORD")
                          (if (nil? (namespace v))
@@ -249,344 +251,14 @@
 ;; In other words, HTML5 syntax and semantics are not uniform across
 ;; all elements.
 
-(def xsl-identity-transform-html
-   ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes' cdata-section-elements='script style'/>"
-
-   "<xsl:template match='node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='//*[@" (name miraj-pseudo-kw) "]' priority='999'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-     "<xsl:element name='style'>"
-       "<xsl:value-of select='@" (name miraj-pseudo-kw) "'/>"
-     "</xsl:element>"
-   "</xsl:template>"
-
-
-
-   "<xsl:template match='html'>"
-     "<xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;</xsl:text>"
-     "<xsl:text>&#x0A;</xsl:text>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template priority=\"99\" match=\"" (str/join "|" html5-void-elts) "\">"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-       "VOID_333109"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   ;; remove self-closing tags
-   "<xsl:template match='*[not(node()) and not(string(.))]'>"
-   ;; "<xsl:message>EMPTY TAG</xsl:message>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-       "_EMPTY_333109"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='script' priority='999'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-       "<xsl:if test='not(node()) and not(string(.))'>"
-         "_EMPTY_333109"
-       "</xsl:if>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='script/text()' priority='999'>"
-     "<xsl:text disable-output-escaping='yes'>"
-       "<xsl:text>&#x0A;</xsl:text>"
-       "<xsl:value-of select='.'/>"
-       "<xsl:text>&#x0A;</xsl:text>"
-     ;; "<xsl:copy>"
-       ;; "<xsl:apply-templates select='@*|node()'/>"
-     ;; "</xsl:copy>"
-     "</xsl:text>"
-   "</xsl:template>"
-
-   "<xsl:template match=\"@*\">"
-   ;; Handle HTML boolean attributes
-   ;; If the attribute is present, its value must either be the empty
-   ;; string or a value that is an ASCII case-insensitive match for
-   ;; the attribute's canonical name, with no leading or trailing
-   ;; whitespace. The values "true" and "false" are not allowed on
-   ;; boolean attributes.
-   ;; "<xsl:message>Attr: <xsl:value-of select='name()'/> = <xsl:value-of select='.'/></xsl:message>"
-     "<xsl:choose>"
-       ;; ONLY transform PSEUDO attributes
-       "<xsl:when test='name() = \"" (name miraj-pseudo-kw) "\"'>"
-       ;; omit the attribute
-       "</xsl:when>"
-       ;; "<xsl:when test='name() = .'>"
-       ;; ;; FIXME: test for case-insensitive match to canonical name
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       ;; "<xsl:when test='. = \"\"'>"
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       ;; "<xsl:when test='. = concat(\":\", name())'>"
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       ;; (str "<xsl:when test='. = \"" miraj-boolean-tag "\"'>")
-       ;;   "<xsl:attribute name='{name()}'>"
-       ;;     miraj-boolean-tag
-       ;;   "</xsl:attribute>"
-       ;; "</xsl:when>"
-       ;; {:foo ""}
-       "<xsl:otherwise>"
-         "<xsl:copy/>"
-       "</xsl:otherwise>"
-     "</xsl:choose>"
-
-
-   "</xsl:template>"
-   "</xsl:stylesheet>"))
-
-(def xsl-identity-transform-xml
-   ;; see http://news.oreilly.com/2008/07/simple-pretty-printing-with-xs.html
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
-
-   "<xsl:template match='@*|node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-   "</xsl:stylesheet>"))
-
-(def xsl-normalize
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
-
-   "<xsl:template match='html' priority='99'>"
-     "<xsl:copy>"
-       "<head>"
-         "<xsl:choose>"
-           "<xsl:when test='meta[@name=\"charset\"]'>"
-             "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='charset'/>"
-           "</xsl:when>"
-           "<xsl:otherwise>"
-             "<meta name='charset' content='utf-8'/>"
-           "</xsl:otherwise>"
-         "</xsl:choose>"
-         "<xsl:apply-templates select='link|meta|style' mode='head'/>"
-         "<xsl:apply-templates select='head/link|head/meta|head/style' mode='head'/>"
-         "<xsl:apply-templates select='script|head/script' mode='head'/>"
-       "</head>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='head'/>"
-   "<xsl:template match='head' mode='head'>"
-     "<xsl:apply-templates select='@*|node()' mode='head'/>"
-   "</xsl:template>"
-
-   "<xsl:template match='meta[@name=\"charset\"]' priority='99'/>"
-   "<xsl:template match='meta[@name=\"charset\"]' mode='head'/>"
-   "<xsl:template match='meta[@name=\"charset\"]' mode='charset'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='@*|node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='link|meta|script|style'/>"
-   "<xsl:template match='link|meta|script|style' mode='head'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='body//style' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='body//script' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   ;; "<xsl:template match='@" miraj-pseudo-kw "' priority='99'>"
-   ;;     "<xsl:element name='link'>"
-   ;;       "<xsl:attribute name='rel'>import</xsl:attribute>"
-   ;;       "<xsl:attribute name='href'>"
-   ;;         "<xsl:text>/bower_components/polymer/polymer.html</xsl:text>"
-   ;;       "</xsl:attribute>"
-   ;;     "</xsl:element>"
-   ;; "</xsl:template>"
-
-
-   ;; ;; "<xsl:template match='script'/>"
-   ;; "<xsl:template match='script/text()'>"
-   ;;   "<xsl:text disable-output-escaping='yes'>"
-   ;;   "FOO &amp; BAR"
-   ;;   "<xsl:copy>"
-   ;;     "<xsl:apply-templates select='@*|node()'/>"
-   ;;   "</xsl:copy>"
-   ;;   "</xsl:text>"
-   ;; "</xsl:template>"
-
-   ;; "<xsl:template match='style/text()'>"
-   ;;   "<xsl:text disable-output-escaping='yes'>"
-   ;;   "FOO &lt; BAR"
-   ;;     ;; "<xsl:copy>"
-   ;;     ;;   "<xsl:apply-templates select='@*|node()'/>"
-   ;;     ;; "</xsl:copy>"
-   ;;   "</xsl:text>"
-   ;; "</xsl:template>"
-
-   "<xsl:template match='body//link' priority='99' mode='head'/>"
-   "</xsl:stylesheet>"))
-
-(def xsl-normalize-codom
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'>"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
-
-   "<xsl:template match='/' priority='99'>"
-     "<xsl:apply-templates select='@*|node()'/>"
-   "</xsl:template>"
-
-   "<xsl:template match='CODOM_56477342333109' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:element name='link'>"
-         "<xsl:attribute name='rel'>import</xsl:attribute>"
-         "<xsl:attribute name='href'>"
-           "<xsl:text>/bower_components/polymer/polymer.html</xsl:text>"
-         "</xsl:attribute>"
-       "</xsl:element>"
-       "<xsl:apply-templates select='//link' mode='head'/>"
-       "<xsl:element name='dom-module'>"
-         "<xsl:attribute name='id'>"
-           "<xsl:value-of select='@id'/>"
-         "</xsl:attribute>"
-         "<template>"
-           "<xsl:apply-templates/>"
-         "</template>"
-       "</xsl:element>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='@*|node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='link'/>"
-   "<xsl:template match='link' mode='head'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "</xsl:stylesheet>"))
-
 ;; from http://webcomponents.org/polyfills/ :
 ;; Note: Due to the nature of some of the polyfills, to maximize
 ;; compatibility with other libraries, make sure that webcomponents.js is
 ;; the first script tag in your document's <head>.
-(def xsl-optimize-js
-  (str
-   "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform' >"
-   "<xsl:strip-space elements='*' />"
-   "<xsl:output method='xml' encoding='UTF-8' indent='yes'/>"
-
-   "<xsl:template match='html'>"
-     "<xsl:if test='not(head)'>"
-       "<xsl:message terminate='yes'>OPTIMIZE-JS ERROR: &lt;head> not found; did you forget to run normalize first?</xsl:message>"
-     "</xsl:if>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='@*|node()'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='head'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='meta[@name=\"charset\"]' mode='optimize'/>"
-       "<xsl:apply-templates select='//script' mode='polyfill'/>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='meta[@name=\"charset\"]'/>"
-   "<xsl:template match='meta[@name=\"charset\"]' mode='optimize'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='head/script'/>"
-   "<xsl:template match='body/script'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-   "<xsl:template match='script' mode='optimize' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   ;;FIXME - put webcomponentsjs after all <meta> elts?
-   ;; (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"})
-   "<xsl:template match='script' mode='polyfill'/>"
-   ;; "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>"
-   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize' priority='99'/>"
-   "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-
-   "<xsl:template match='body' priority='99'>"
-     "<xsl:copy>"
-       "<xsl:apply-templates select='@*|node()'/>"
-       "<xsl:apply-templates select='//head/script' mode='optimize'/>"
-     "</xsl:copy>"
-   "</xsl:template>"
-   "</xsl:stylesheet>"))
 
 (declare element parse-str)
+
+(def js-optimizer "miraj/co_dom/optimize-js.xsl")
 
 (defn xsl-xform
   [ss elts]
@@ -601,7 +273,11 @@
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
         factory (TransformerFactory/newInstance)
-        transformer (.newTransformer factory (StreamSource. (StringReader. ss)))]
+        transformer (let [r (io/resource ss)
+                          xsl (slurp r)]
+                      (.newTransformer factory (StreamSource. (StringReader. xsl))))
+        ;;(.newTransformer factory (StreamSource. (StringReader. ss)))
+        ]
     ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
     ;; (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
@@ -647,13 +323,14 @@
 
         ;; _ (log/debug (format "XSL-ID-X %s" xsl-identity-transform-html))
         transformer (if (= :html @mode)
-                      (do
-                        ;;(log/trace "transforming with xsl-identity-transform-html: " xsl-identity-transform-html)
-                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
-                      (do
+                      (let [r (io/resource "miraj/co_dom/identity-html.xsl")
+                            xsl (slurp r)]
+                        ;; (StringReader. xsl-identity-transform-html))))
+                        (.newTransformer factory (StreamSource. (StringReader. xsl))))
+                      (let [r (io/resource "miraj/co_dom/identity-xml.xsl")
+                            xsl (slurp r)]
                         ;;(log/trace "transforming with xsl-identity-transform-xml")
-                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
-    ;;                      (.newTransformer factory))]
+                        (.newTransformer factory (StreamSource. (StringReader. xsl)))))]
     (.setOutputProperty transformer OutputKeys/INDENT "yes")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "4")
     (if (.startsWith ml "<?xml")
@@ -724,13 +401,23 @@
                      sw))
         factory (TransformerFactory/newInstance)
         transformer (if (= :html @mode)
-                      (do
-                        ;;(println "transforming with xsl-identity-transform-html")
-                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
-                      (do
+                      (let [r (io/resource "miraj/co_dom/identity-html.xsl")
+                            xsl (slurp r)]
+                        ;; (StringReader. xsl-identity-transform-html))))
+                        (.newTransformer factory (StreamSource. (StringReader. xsl))))
+                      (let [r (io/resource "miraj/co_dom/identity-xml.xsl")
+                            xsl (slurp r)]
                         ;;(log/trace "transforming with xsl-identity-transform-xml")
-                      (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
-    ;;                      (.newTransformer factory))]
+                        (.newTransformer factory (StreamSource. (StringReader. xsl)))))
+
+        ;; transformer (if (= :html @mode)
+        ;;               (do
+        ;;                 ;;(println "transforming with xsl-identity-transform-html")
+        ;;               (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-html))))
+        ;;               (do
+        ;;                 ;;(log/trace "transforming with xsl-identity-transform-xml")
+        ;;               (.newTransformer factory (StreamSource. (StringReader. xsl-identity-transform-xml)))))]
+        ]
     (.setOutputProperty transformer OutputKeys/INDENT "no")
     (.setOutputProperty transformer "{http://xml.apache.org/xslt}indent-amount", "0")
     (if (.startsWith ml "<?xml")
@@ -1037,6 +724,14 @@
        ;; (not (= miraj.co_dom.Element (type m)))))
        (not (= (.getCanonicalName (class m))
                (.getCanonicalName miraj.co_dom.Element)))))
+
+(defn co-dom-node?
+  [m]
+  ;; NB: if this file is reloaded (e.g. during dev) then (instance?
+  ;; Element m) will fail for uses of Element that have not also been
+  ;; reloaded.  So we compare classnames instead of types.
+  (= (.getCanonicalName (class m))
+     (.getCanonicalName miraj.co_dom.Element)))
 
 (defn- special-kw?
   [tok]
