@@ -22,8 +22,6 @@
     </xsl:element>
   </xsl:template>
 
-
-
   <xsl:template match='html'>
     <xsl:text disable-output-escaping='yes'>&lt;!doctype html&gt;</xsl:text>
     <xsl:text>&#x0A;</xsl:text>
@@ -62,9 +60,9 @@
   </xsl:template>
 
   <xsl:template match='script/text()' priority='999'>
-    <xsl:text disable-output-escaping='yes'>&#x0A;</xsl:text>
+    <!-- <xsl:text disable-output-escaping='yes'>&#x0A;</xsl:text> -->
     <xsl:value-of select='.'/>
-    <xsl:text disable-output-escaping='yes'>&#x0A;</xsl:text>
+    <!-- <xsl:text disable-output-escaping='yes'>&#x0A;</xsl:text> -->
       <!-- <xsl:copy> -->
       <!-- <xsl:apply-templates select='@*|node()'/> -->
       <!-- </xsl:copy> -->
