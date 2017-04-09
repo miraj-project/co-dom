@@ -22,14 +22,14 @@
 
   <xsl:template match='head'>
     <xsl:copy>
-      <xsl:apply-templates select='meta[@name=\"charset\"]' mode='optimize'/>
+      <xsl:apply-templates select='meta[@name="charset"]' mode='optimize'/>
       <xsl:apply-templates select='//script' mode='polyfill'/>
       <xsl:apply-templates select='@*|node()'/>
     </xsl:copy>
   </xsl:template>
 
-  <xsl:template match='meta[@name=\"charset\"]'/>
-  <xsl:template match='meta[@name=\"charset\"]' mode='optimize'>
+  <xsl:template match='meta[@name="charset"]'/>
+  <xsl:template match='meta[@name="charset"]' mode='optimize'>
     <xsl:copy>
       <xsl:apply-templates select='@*|node()'/>
     </xsl:copy>
@@ -50,9 +50,9 @@
   <!-- FIXME - put webcomponentsjs after all <meta> elts? -->
   <!-- (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"}) -->
   <xsl:template match='script' mode='polyfill'/>
-  ;; "<xsl:template match='script[contains(@src, \"webcomponentsjs\")]'/>
-  <xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='optimize' priority='99'/>
-  <xsl:template match='script[contains(@src, \"webcomponentsjs\")]' mode='polyfill' priority='99'>
+  ;; "<xsl:template match='script[contains(@src, "webcomponentsjs")]'/>
+  <xsl:template match='script[contains(@src, "webcomponentsjs")]' mode='optimize' priority='99'/>
+  <xsl:template match='script[contains(@src, "webcomponentsjs")]' mode='polyfill' priority='99'>
     <xsl:copy>
       <xsl:apply-templates select='@*|node()'/>
     </xsl:copy>
