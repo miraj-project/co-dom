@@ -130,10 +130,14 @@
            "<script>x < y</script>"))
     (is (= (serialize (element :script "foo & bar"))
            "<script>foo & bar</script>"))
-    (is (= (serialize (element :script "1 + 1 > 1 + 2"))
-           "<script>1 + 1 > 1 + 2</script>"))
-    (is (= (serialize (element :script "1 + 1 < 1 + 2 && x < y"))
-           "<script>1 + 1 < 1 + 2 && x < y</script>"))))
+    (is (= "<script>1 + 1 > 1 + 2</script>"
+           (serialize (element :script "1 + 1 > 1 + 2"))))
+    (is (= "<script>1 + 1 < 1 + 2 && x < y</script>"
+           (serialize (element :script "1 + 1 < 1 + 2 && x < y"))))
+    (is (= "<script>
+1 + 1 < 1 + 2 && x < y
+</script>"
+           (serialize (element :script "\n1 + 1 < 1 + 2 && x < y\n"))))))
 
 (deftest ^:elts cdata-style
   (testing "CDATA - <style>"

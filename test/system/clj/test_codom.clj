@@ -19,7 +19,12 @@
 (serialize (element :div :!centered))
 
 (element :div {:$color "blue"})
-(serialize (element :div {:$hover {:color "blue"}}))
+(pprint (element :div :#foo {:$link {:background "#ff0"}
+                                :$visited {:background "#fff"}
+                                :$hover {:outline "thin red solid"}
+                                :$active {:background "#00f"}
+                                :$color "green"
+                                :$background-color "red"}))
 
 (element :div {:@lname "Smith"})
 
