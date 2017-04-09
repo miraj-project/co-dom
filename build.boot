@@ -7,10 +7,10 @@
 
  :repositories #(conj % ["clojars" {:url "https://clojars.org/repo/"}])
 
- :dependencies   '[[org.clojure/clojure RELEASE :scope "provided"]
-                   ;; [org.clojure/clojurescript "1.7.228"]
+ :dependencies   '[[org.clojure/clojure RELEASE]
                    [org.clojure/data.json "0.2.6"]
                    [clj-time "0.11.0"]
+
                    [org.clojure/tools.logging "0.3.1" :scope "compile"]
                    [org.slf4j/slf4j-log4j12 "1.7.1"]
                    [log4j/log4j "1.2.17" :exclusions [javax.mail/mail
@@ -24,24 +24,13 @@
                    ;; [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
                    ;; [miraj.polymer/iron "1.2.3-SNAPSHOT" :scope "test"]
 
-                   [samestep/boot-refresh "0.1.0"]
+                   [samestep/boot-refresh "0.1.0" :scope "test"]
                    [adzerk/boot-test "1.2.0" :scope "test"]])
 
 (require '[adzerk.boot-test :refer :all]
          '[samestep.boot-refresh :refer [refresh]])
 
-;; ;; [boot/core "2.5.2" :scope "provided"]
-;; ;; [adzerk/boot-test "1.0.7" :scope "test"]
-;; ;; Webjars-locator uses logging
-;; [org.slf4j/slf4j-nop "1.7.12" :scope "test"]
-;; [org.webjars/webjars-locator "0.29"]
-;; ;; For testing the webjars asset locator implementation
-;; [org.webjars/bootstrap "3.3.6" :scope "test"]])
-
-;; (require '[adzerk.boot-test :refer [test]])
-
 (task-options!
- aot {:namespace #{'miraj.NSException}}
  pom  {:project     +project+
        :version     +version+
        :description "Base library supporting functional HTML - see also miraj/html"
@@ -52,17 +41,15 @@
 (deftask build
   "build"
   []
-  (comp ;; (aot)
-        (pom)
+  (comp (pom)
         (jar)
         (install)
         (target)))
 
-(deftask dev
-  "watch etc."
+(deftask check
+  "watch etc. for dev using checkout"
   []
-  (comp (repl)
-        (watch)
+  (comp (watch)
         (notify :audible true)
         #_(refresh)
         (pom)
@@ -70,9 +57,23 @@
         (target)
         (install)))
 
-(deftask check
+(deftask systest
+  "serve and repl for integration testing"
+  []
+  (set-env! :resource-paths #(conj % "test/system/clj"))
+  (comp
+   (build)
+   (serve :dir "target")
+   (cider)
+   (repl)
+   (watch)
+   (notify :audible true)
+   (target)))
+
+(deftask utest
   "test:"
-  [n namespaces  NS  #{sym}  "Compile all miraj vars in namespace NS."]
-  (set-env! :source-paths #{"test"})
-  ;;(set-env! :dependencies #(conj % '[miraj.polymer.paper "1.2.3-SNAPSHOT" :scope "test"]))
-  (test :namespaces namespaces :exclude #"data.xml.*"))
+  [n namespaces  NS  #{sym}  "test ns"]
+  (set-env! :source-paths #(conj % "test/unit/clj"))
+  (test :namespaces namespaces
+        :exclude #"data.xml.*"))
+        ;; :filters #(= (-> % meta :name) "binding-1way")))
