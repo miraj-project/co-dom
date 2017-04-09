@@ -174,7 +174,7 @@
 
 (defn write-attributes [attrs ^javax.xml.stream.XMLStreamWriter writer]
   (doseq [[k v] attrs]
-    ;;(println "ATTR: " k " = " v " " (type v) (keyword? v))
+    ;; (log/debug (format "write-attributes %s" attrs))
     (let [[attr-ns nm] (qualified-name k)
           attr-name (if (= :html @mode)
                       (validate-html5-attr-name nm v)
@@ -210,7 +210,19 @@
                      ;;(str v))
                      ]
       (if attr-ns
-        (.writeAttribute writer attr-ns attr-name attr-val)
+        (try (.writeAttribute writer attr-ns attr-name attr-val)
+             (catch javax.xml.stream.XMLStreamException e
+              (log/fatal (format "EXCEPTION writing attr: %s=%s\nMsg: %s"
+                                                   k v
+                                                   ;; attr-ns attr-name attr-val
+                                                   (.getMessage e)))
+              (throw e))
+             (catch Exception e
+              (log/fatal (format "EXCEPTION writing attr: %s=%s Msg: %s"
+                                                   k v
+                                                   ;; attr-ns attr-name attr-val
+                                                   (.getMessage e)))
+              (throw e)))
         (.writeAttribute writer attr-name attr-val)))))
 
 (declare serialize serialize-impl)
