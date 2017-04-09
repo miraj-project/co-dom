@@ -38,7 +38,7 @@
            ;; [miraj NSException]))
 ;;           [java.util Date]))
 
-(println "loading miraj/co-dom.clj")
+(println "loading miraj.co-dom")
 ;;FIXME:  support comment nodes
 
 (defonce mode (atom nil))
@@ -993,7 +993,7 @@
               (if (> (count (str/split id #" "))
                      1) (throw (Exception. (format "Only one ID allowed: %s" id))))
               id)
-        ;; _ (log/debug (format "IDS %s" ids))
+        ;; _ (log/debug (format "IDS: %s" ids))
 
         classes (let [c1 (:class attr-map)
                       c2 (:class specials-map)]
