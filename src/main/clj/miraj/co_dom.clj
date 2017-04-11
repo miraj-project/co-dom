@@ -10,7 +10,8 @@
       :author "Gregg Reynolds, Chris Houser"}
   miraj.co-dom
   (:refer-clojure :exclude [import require])
-  (:require [clojure.spec :as spec]
+  (:require [miraj.style :as style]
+            [clojure.spec :as spec]
             [clojure.string :as str]
             [clojure.data.json :as json]
             ;; [cheshire.core :as json :refer :all]
@@ -44,7 +45,11 @@
 (defonce mode (atom nil))
 (defonce verify? (atom false))
 
+(def ^:dynamic *pprint* false)
+
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_5HgyKgZoQSuzPt9U")
+(defonce miraj-polymer-attrib-binding-flag "__MIRAJ_POLYMER_ATTR_BINDING_e0c9cd95-e1c7-4fa7-a4c7-614f7e3f0a52")
+;; (defonce miraj-polymer-attrib-binding-kw ::attrib-binding)
 (defonce miraj-pseudo-kw :__MIRAJ_PSEUDO_sfmWqa5HptMJ6ATR)
 
 (defn pprint-str [m]
@@ -197,7 +202,8 @@
                          (if (nil? (namespace v))
                            (str "{{" (get-two-way-token v) "}}")
                            ;;FIXME
-                           (str "{{" (subs (str v) 1) "}}")))
+                           (str  ;;miraj-polymer-attrib-binding-flag
+                                 "{{" (subs (str v) 1) "}}")))
 
                        (symbol? v) (str "[[" (str v) "]]")
 
@@ -225,7 +231,7 @@
               (throw e)))
         (.writeAttribute writer attr-name attr-val)))))
 
-(declare serialize serialize-impl)
+(declare serialize serialize-raw serialize-impl)
 
 ; Represents a node of an XML tree
 (defrecord Element [tag attrs content]
@@ -233,7 +239,7 @@
   (toString [x]
     (do ;; (print "Element toString: " x "\n")
         (let [sw (java.io.StringWriter.)]
-          (serialize x)))))
+          (serialize-raw x)))))
 
 (defrecord CData [content])
 (defrecord Comment [content])
@@ -280,7 +286,7 @@
              (if (not (instance? miraj.co_dom.Element elts)) ;
                (do ;;(println (type elts))
                    (throw (Exception. "xsl-xform only works on miraj.co-dom.Element"))))
-             (serialize :xml elts))
+             (serialize-raw :xml elts))
         ;; _ (println "XF SOURCE: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
@@ -300,7 +306,7 @@
 
 ;;FIXME: support non-tree input
 ;;FIXME: support :xhtml option
-(defn pprint-impl
+ (defn pprint-impl
   [& elts]
   ;; (log/info "PPRINT-IMPL: " elts)
   (let [s (if (or (= :html (first elts))
@@ -318,13 +324,13 @@
              (throw (Exception. "xml pprint only works on miraj.co-dom.Element"))
              (if (> (count s) 3)
                (do ;;(println "pprint-impl FOREST")
-                   (let [s (serialize :xml (element :CODOM_56477342333109 s))]
+                   (let [s (serialize-raw :xml (element :CODOM_56477342333109 s))]
                      (reset! mode fmt)
                      s))
-               (let [s (serialize :xml s)]
+               (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        ;; _ (log/info "XML SERIALIZED: " ml)
+        ;; _ (log/info "XML PPRINT SERIALIZED: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -349,26 +355,41 @@
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
 
+    ;; (.transform transformer xmlSource xmlOutput)
+    ;; (println (if (= :html fmt)
+    ;;            ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID_333109<[^>]+>" "")
+    ;;            (let [string-writer (.getWriter xmlOutput)
+    ;;                  s (.toString string-writer)
+    ;;                  void (.flush string-writer)
+    ;;                  s (str/replace s #"<CODOM_56477342333109>\n" "")
+    ;;                  s (str/replace s #"</CODOM_56477342333109>\n" "")
+    ;;                  s (str/replace s #"VOID_333109<[^>]+>" "")
+    ;;                  s (str/replace s #"_EMPTY_333109" "")
+    ;;                  s (str/replace s #"^_([^=]*)=" "$1\\$=")
+    ;;                  s (str/replace s #"<!\[CDATA\[" "")
+    ;;                  s (str/replace s #"]]>" "")
+    ;;                  s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
+    ;;                  s (str/replace s
+    ;;                                 (re-pattern (str "=\""
+    ;;                                                  miraj-polymer-attrib-binding-flag
+    ;;                                                  " *\\{\\{miraj.polymer/"))
+    ;;                                 "\\$=\"\\{\\{")
+    ;;                  ]
+    ;;              s)
+    ;;            (.toString (.getWriter xmlOutput))))))
     (.transform transformer xmlSource xmlOutput)
-    (println (if (= :html fmt)
-               ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID_333109<[^>]+>" "")
-               (let [string-writer (.getWriter xmlOutput)
-                     s (.toString string-writer)
-                     void (.flush string-writer)
-                     s (str/replace s #"<CODOM_56477342333109>\n" "")
-                     s (str/replace s #"</CODOM_56477342333109>\n" "")
-                     s (str/replace s #"VOID_333109<[^>]+>" "")
-                     s (str/replace s #"_EMPTY_333109" "")
-                     s (str/replace s #"^_([^=]*)=" "$1\\$=")
-                     s (str/replace s #"<!\[CDATA\[" "")
-                     s (str/replace s #"]]>" "")
-                     regx (re-pattern (str "=\"" miraj-boolean-tag "\""))
-                     ;;regx (re-pattern (str miraj-boolean-tag "="))
-                     ]
-                 ;; boolean attribs: value must be ""
-                 ;;FIXME: make this more robust
-                 (str/replace s regx ""))
-               (.toString (.getWriter xmlOutput))))))
+    (let[result (if (= :html fmt)
+                  (let [string-writer (.getWriter xmlOutput)
+                        s (.toString string-writer)
+                        ;; _ (prn "XML OUTPUT: " s)
+                        void (.flush string-writer)
+                        ]
+                    ;;(str/replace s regx "")
+                    s)
+                  (do (println "XML FOOBAR")
+                      (.toString (.getWriter xmlOutput))))]
+      ;; (prn "PPRINT OUTPUT: " result)
+      result)))
 
 (defn pprint
   [& elts]
@@ -382,6 +403,32 @@
         (if (nil? (first elts))
           nil
           (pprint-impl (first elts))))))
+
+(defn normalize-html-str
+  [s]
+  (let [result (if (= :html @mode)
+                 (let [s (str/replace s #"<CODOM_56477342333109>" "")
+                       s (str/replace s #"</CODOM_56477342333109>" "")
+                       s (str/replace s #"VOID_333109<[^>]+>" "")
+                       s (str/replace s #"_EMPTY_333109" "")
+                       s (str/replace s #"<!\[CDATA\[" "")
+                       s (str/replace s #"]]>" "")
+                       s (str/replace s
+                                      (re-pattern (str "=\""
+                                                       ;; miraj-polymer-attrib-binding-flag
+                                                       " *\\{\\{miraj.polymer/"))
+                                      "\\$=\"\\{\\{")
+                       s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
+                       ;; regx (re-pattern (str "=\"" miraj-boolean-tag "\""))
+                       ;;regx (re-pattern (str miraj-boolean-tag "="))
+                       ]
+                   ;;(str/replace s regx "")
+                   s)
+                 (do (println "XML FOOBAR")
+                     s
+                     #_(.toString (.getWriter xmlOutput))))]
+    ;; (prn "OUTPUT: " result)
+    result))
 
 (defn serialize-impl
   [& elts]
@@ -401,10 +448,10 @@
              (throw (Exception. "xml pprint only works on miraj.co-dom.Element"))
              (if (> (count s) 1)
                (throw (Exception. "forest input not yet supported for serialize"))
-               (let [s (serialize :xml s)]
+               (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        ;; _ (log/debug (format "SERIALIZED %s" ml))
+        ;; _ (log/debug (format "SERIALIZE-IMPL serialized: %s" ml))
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -442,24 +489,17 @@
                         s (.toString string-writer)
                         ;; _ (prn "XML OUTPUT: " s)
                         void (.flush string-writer)
-                        s (str/replace s #"<CODOM_56477342333109>" "")
-                        s (str/replace s #"</CODOM_56477342333109>" "")
-                        s (str/replace s #"VOID_333109<[^>]+>" "")
-                        s (str/replace s #"_EMPTY_333109" "")
-                        s (str/replace s #"<!\[CDATA\[" "")
-                        s (str/replace s #"]]>" "")
-                        regx (re-pattern (str "=\"" miraj-boolean-tag "\""))
-                        ;;regx (re-pattern (str miraj-boolean-tag "="))
                         ]
-                    (str/replace s regx ""))
+                    ;;(str/replace s regx "")
+                    s)
                   (do (println "XML FOOBAR")
                       (.toString (.getWriter xmlOutput))))]
-      ;; (prn "OUTPUT: " result)
+      ;; (prn "SERIALIZE OUTPUT: " result)
       result)))
 
 (declare emit)
 
-(defn serialize
+(defn serialize-raw
   "Serializes the Element to String and returns it.
    Options:
     mode:  :html (default) or :xml
@@ -483,7 +523,9 @@
                     (do ;(log/trace "emitting HTML:" args)
                       ;; (if (= :html (:tag (first args)))
                       ;;   (.write string-writer "<!DOCTYPE html>"))
-                      (apply serialize-impl elts))
+                      (if *pprint*
+                        (apply pprint elts)
+                        (apply serialize-impl elts)))
                     ;; (emit args string-writer :html true :with-xml-declaration false))
 
                     (= @mode :xml)
@@ -503,6 +545,16 @@
     ;;              regx (re-pattern (str "=\"" miraj-boolean-tag "\""))]
     ;;              (str/replace s regx ""))
     ;;        (.toString string-writer)))))
+
+(defn serialize
+  "Serializes the Element to String and returns it.
+   Options:
+    mode:  :html (default) or :xml
+    :encoding <str>          Character encoding to use
+    :with-xml-declaration <bool>, default false"
+  ;; [& args]
+  [& elts]
+  (normalize-html-str (serialize-raw elts)))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   ;;(println "emit-start-tag: " (:name event))
@@ -636,26 +688,20 @@
       (cons (next-events (first coll) r) next-items)
       (next-events (first coll) next-items)))
 
-  ;; clojure.lang.PersistentArrayMap
-  ;; (gen-event [coll]
-  ;;   (println (str "GEN-EVENT: " coll)))
-  ;; (next-events [coll next-items]
-  ;;   (println (str "NEXT-EVENTS: " coll next-items)))
-
-  clojure.lang.Keyword
+  clojure.lang.Keyword ;; Polymer two-way binding annotation? see write-attributes
   (gen-event [kw]
     (let [nm (name kw)
           ns (namespace kw)]
       (Event. :kw nil nil
-                (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}"))))
-              ;; FIXME this should not be necessary if the tag fns are correct:
+              (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}"))))
+              ;; FIXME this should not be necessary if the tag fns are correct?
               ;; (if (nil? (namespace kw))
               ;;   (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
 
   (next-events [_ next-items]
     next-items)
 
-  clojure.lang.Symbol
+  clojure.lang.Symbol ;; Polymer one-way binding annotation
   (gen-event [sym]
     (let [nm (name sym)
           ns (namespace sym)]
@@ -721,11 +767,6 @@
                (flatten-elements (next-events e (rest elements)))))))))
 
 (declare parse-elt-args)
-
-(def pseudo-attrs
-  #{:$active :$checked :$disabled :$enabled :$focus :$hover :$indeterminate :$lang :$link :$target :$visited
-    :$root :$nth-child :$nth-last-child :$nth-of-type :$nth-last-of-type :$first-child :$last-child :$first-of-type :$last-of-type :$only-child :$only-of-type :$empty
-    :$after :$before :$first-line :$first-letter})
 
 (defn attr-map?
   [m]
@@ -846,7 +887,7 @@
     ;; (log/debug (format "GET-PSEUDO %s" (seq style)))
     (str/join " " style)))
 
-(defn- attr-sym?
+#_(defn- attr-sym?
   [arg]
   (if (list? arg)
     (let [fst (first arg)]
@@ -861,104 +902,135 @@
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  ;; (log/debug (format "NORMALIZE-attributes %s %s" tag attrs))
+  (log/debug (format "NORMALIZE-attributes %s %s" tag attrs))
   (if (instance?  miraj.co_dom.Element attrs)
     (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
-    (let [other-attrs (apply hash-map
-                             (flatten (filter (fn [[k v]]
+    (let [non-style-attrs (apply hash-map
+                                 (flatten (filter (fn [[k v]]
                                                 ;; (log/debug (format "KV %s %s" k v))
-                                                (if (not (or (keyword? k) (attr-sym? k)))
+                                                (if (not (keyword? k)) ;; (attr-sym? k)))
                                                   (throw (Exception.
                                                           (format "Only keyword attr names supported: %s is %s"
                                                                   k (type k)))))
-                                                (or (= k miraj-pseudo-kw)
-                                                    (and (list? k) (= 'clojure.core/deref
-                                                                      (first k)))
+                                                ;;(or ;; (= k miraj-pseudo-kw)
+                                                    ;; (and (list? k) (= 'clojure.core/deref
+                                                    ;;                   (first k)))
                                                     (let [attr-ns (namespace k)
                                                           attr-name (name k)
-                                                          c (get attr-name 0)]
-                                                      (java.lang.Character/isLetter c))))
+                                                          ;; c (get attr-name 0)
+                                                          ]
+                                                      (and
+                                                       ;; (not (str/ends-with? attr-name "$"))
+                                                       ;; (not= attr-ns "miraj.polymer")
+                                                       ;; (not= attr-ns "miraj.style")
+                                                       (nil? attr-ns))))
+                                                      ;; (java.lang.Character/isLetter c))))
                                               ;; FIXME: why did we dissoc :content?
                                               ;; (dissoc attrs :content))))
                                               attrs)))
-          ;; _ (log/debug (format "OTHER Attrs  %s" other-attrs))
+          _ (log/debug (format "NON-STYLE Attrs  %s" non-style-attrs))
 
-          pseudo-attrs (apply hash-map
-                              (flatten (filter (fn [[k v]] (contains? pseudo-attrs k)) attrs)))
-          pseudo-class (if (empty? pseudo-attrs) nil (str "miraj_"
-                                                          #_(rand-int 100000)
-                                                          (java.util.UUID/randomUUID)))
-          pseudo (if (empty? pseudo-attrs)
-                   {}
-                   {miraj-pseudo-kw (get-pseudo-styles tag pseudo-attrs pseudo-class)})
-          ;; _ (log/debug (format "PSEUDO %s" pseudo))
+          attrib-bindings (apply hash-map
+                                  (flatten (filter (fn [[k v]]
+                                                     ;; (log/debug (format "KV %s %s" k v))
+                                                     (let [attr-ns (namespace k)
+                                                           attr-name (name k)]
+                                                       (not (nil? attr-ns))
+                                                       #_(= attr-ns "miraj.polymer")))
+                                                       ;; (str/ends-with? attr-name "$")))
+                                                   attrs)))
+          attrib-bindings ;; {::attrib-binding
+                           (into {} (map (fn [[k v]]
+                                  (let [nm (clojure.core/name k)]
+                                    ;; {(keyword (subs nm 0 (str/last-index-of nm \$)))
+                                    {(keyword nm)
+                                     (keyword (namespace k) (clojure.core/name v))}))
+                                attrib-bindings))
+          ;;}
+          _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
 
-          other-attrs (if (empty? pseudo) other-attrs
-                          (update-in other-attrs [:class]
-                                     (fn [old] (str old " " pseudo-class))))
-          ;; _ (log/debug (format "WITH PSEUDO %s" other-attrs))
-
-          style-attrs (apply hash-map
+          plain-style-attrs (apply hash-map
                               (flatten (filter (fn [[k v]]
-                                                 (and (not (contains? pseudo-attrs k))
+                                                 (log/debug (format "KV %s %s" k v))
+                                                 (and (not (contains? style/pseudo-attrs k))
                                                       (let [attr-ns (namespace k)
                                                             attr-name (name k)
-                                                            c (get attr-name 0)]
-                                                        (= c \$))))
+                                                            ;; c (get attr-name 0)
+                                                            ]
+                                                        (= attr-ns "miraj.style"))))
+                                                        ;;(= c \$))))
                                                  attrs)))
-          ;; _ (log/debug (format "STYLE attrs %s empty? %s" style-attrs (empty? style-attrs)))
+          _ (log/debug (format "PLAIN STYLE attrs %s empty? %s"
+                               plain-style-attrs (empty? plain-style-attrs)))
 
-          style (if (empty? style-attrs)
-                  (do ;; (log/debug (format "EMPTY" ))
-                      {})
-                  {:style (str/join ""
-                                    (for [[k v] style-attrs] (str (subs (name k) 1) ":" v ";")))})
-          ;; _ (log/debug (format "STYLE  %s" style))
-          valids (merge style other-attrs pseudo)
+          pseudo-style-attrs (into {} (filter #(contains? style/pseudo-attrs (first %)) attrs))
+          _ (log/debug (format "PSEUDO_STYLE_ATTRS %s" pseudo-style-attrs))
+
+          ;; plain-style-attrs (filter #(not (contains? pseudo-attrs (first %))) style-attrs)
+          ;; _ (log/debug (format "PLAIN-STYLE-ATTRS %s" (seq plain-style-attrs)))
+
+          plain-style-attrs (if (empty? plain-style-attrs)
+                            nil
+                            {:style (str/join " "
+                                      (for [[k v] plain-style-attrs]
+                                        (do ;; (log/debug (format "STYLEATTR %s %s" k v))
+                                            (str (name k) ":" v ";"))))})
+                                            ;; (str (subs (name k) 1) ":" v ";"))))})
+          ;; plain-style-attrs (filter #(not= (first %) "miraj.style") plain-style-attrs)
+
+          _ (log/debug (format "PLAIN-STYLE-ATTRS  %s" (seq plain-style-attrs)))
+
+          ;; style-str (str (if (not (nil? pseudo-style-str)) "{")
+          ;;                plain-style-str
+          ;;                (if (not (nil? pseudo-style-str)) "}")
+          ;;                pseudo-style-str)
+          ;; _ (log/debug (format "STYLE-STR %s" style-str))
+
+          valids (merge plain-style-attrs non-style-attrs attrib-bindings)
           ]
-      ;; (log/debug (format "VALIDS %s" valids))
-      valids)))
+      (log/debug (format "VALIDS %s" valids))
+      [valids pseudo-style-attrs])))
 
-(defn parse-elt-args
-  [tag attrs content]
-  (log/info "parse-elt-args TAG " tag " ATTRS: " attrs " CONTENT: " content)
-  (if (empty? attrs)
-    [attrs content]
-    (let [special-kws (filter (fn [tok]
-                                (and (keyword? tok)
-                                     (nil? (namespace tok))
-                                     (let [tokstr (name tok)]
-                                       (or (.startsWith tokstr "#")
-                                           (.startsWith tokstr ".")
-                                           (.startsWith tokstr "!")))))
-                              content)
-          content (filter (fn [tok]
-                            (or (not (keyword? tok))
-                                (not (nil? (namespace tok)))
-                                (let [tokstr (name tok)]
-                                  (not (or (.startsWith tokstr "#")
-                                           (.startsWith tokstr ".")
-                                           (.startsWith tokstr "!"))))))
-                          content)]
-      ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
-      ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
-      (cond
-        ;;TODO support boolean, etc. for CDATA elts
-        (number? attrs)
-        (do ;;(println "number? attrs: " attrs)
-          ;; (span 3) => <span>3</span>
-          [{} (remove empty? (list (str attrs) content))])
+;; (defn parse-elt-args
+;;   [tag attrs content]
+;;   (log/info "parse-elt-args TAG " tag " ATTRS: " attrs " CONTENT: " content)
+;;   (if (empty? attrs)
+;;     [attrs content]
+;;     (let [special-kws (filter (fn [tok]
+;;                                 (and (keyword? tok)
+;;                                      (nil? (namespace tok))
+;;                                      (let [tokstr (name tok)]
+;;                                        (or (.startsWith tokstr "#")
+;;                                            (.startsWith tokstr ".")
+;;                                            (.startsWith tokstr "!")))))
+;;                               content)
+;;           content (filter (fn [tok]
+;;                             (or (not (keyword? tok))
+;;                                 (not (nil? (namespace tok)))
+;;                                 (let [tokstr (name tok)]
+;;                                   (not (or (.startsWith tokstr "#")
+;;                                            (.startsWith tokstr ".")
+;;                                            (.startsWith tokstr "!"))))))
+;;                           content)]
+;;       ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
+;;       ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
+;;       (cond
+;;         ;;TODO support boolean, etc. for CDATA elts
+;;         (number? attrs)
+;;         (do ;;(println "number? attrs: " attrs)
+;;           ;; (span 3) => <span>3</span>
+;;           [{} (remove empty? (list (str attrs) content))])
 
-        (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
-        [{} (list attrs (remove nil? content))]
+;;         (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
+;;         [{} (list attrs (remove nil? content))]
 
-        (keyword? attrs) (validate-kw-attrib tag attrs content)
+;;         (keyword? attrs) (validate-kw-attrib tag attrs content)
 
-        (map? attrs) (normalize-attributes tag attrs content)
+;;         (map? attrs) (normalize-attributes tag attrs content)
 
-        :else (do ;;(println "NOT map attrs: " attrs)
-                [{} (remove empty? (list attrs content))])))))
+;;         :else (do ;;(println "NOT map attrs: " attrs)
+;;                 [{} (remove empty? (list attrs content))])))))
 
 (defn element
   [tag & args]
@@ -983,17 +1055,18 @@
                         args)
         ;; _ (log/debug (format "Content %s" (seq content)))
 
-        attr-map (normalize-attributes tag attr-map content)
-        ;; _ (log/debug (format "Attr-map %s" attr-map))
+        [attr-map pseudo-attr-map] (normalize-attributes tag attr-map content)
+        _ (log/debug (format "Attr-map %s" attr-map))
+        _ (log/debug (format "Pseudo-Attr-map %s" pseudo-attr-map))
 
         ids (let [c1 (:id attr-map)
                   c2 (:id specials-map)
-                  id (str/trim (str/join " " [c1 c2]))]
+                  ids (remove nil? [c1 c2])]
               ;; (log/debug (format "ID COUNT %s %s" id (count (str/split #" " id))))
-              (if (> (count (str/split id #" "))
-                     1) (throw (Exception. (format "Only one ID allowed: %s" id))))
-              id)
-        ;; _ (log/debug (format "IDS: %s" ids))
+              (if (> (count ids)
+                     1) (throw (Exception. (format "Only one ID allowed: %s" ids))))
+              (first ids))
+        _ (log/debug (format "IDS: %s %s" ids (nil? ids)))
 
         classes (let [c1 (:class attr-map)
                       c2 (:class specials-map)]
@@ -1007,33 +1080,23 @@
 
         ;; _ (log/debug (format "Attrs %s" attrs))
 
+        pseudo-styles (for [[k v] (seq pseudo-attr-map)]
+                        (str "#" ids ":" (clojure.core/name k) " " v))
+        _ (log/debug (format "PSEUDO-styles %s" (seq pseudo-styles)))
 
-        ;; [attrs content] (if (empty? args) [{} '()]
-        ;;                     (let [arg1 (first args)]
-        ;;                       (if (instance? miraj.co_dom.Element arg1)
-        ;;                         [{} arg1]
-        ;;                         (if (map? arg1)
-        ;;                           [arg1 (rest args)]
-        ;;                           (if (keyword? arg1)
-        ;;                             [arg1 (rest args)]
-        ;;                             [{} args])))))
-        ;; _ (log/debug (format "ELT ATTRS %s" attrs))
-        ;; _ (log/debug "ELT CONTENT " content)
-        ;; [attribs contents] (parse-elt-args tag (or attrs {}) (or content '()))
-        ;; [attribs contents] (do (log/debug (format "FIRST CONTENTS %s" (first contents)))
-        ;;                        (if (map? (first contents))
-        ;;                          (parse-elt-args tag
-        ;;                           (merge attribs (first contents)) (rest contents))
-        ;;                          [attribs contents]))
-        ;; _ (log/debug "ELEMENT ATTRIBS: " attribs)
-        ;; _ (log/debug "Element content: " content)
-        e (Element. tag (or attrs {}) (or content '()))]
-        ;; e (if (= (type attrs) miraj.co-dom.Element)
-        ;;     (Element. tag {} (remove nil? (apply list attrs content)))
-        ;;     (if (map? attrs)
-        ;;       (Element. tag (or attrs {}) (flatten (remove nil? content)))
-        ;;       (Element. tag {} (remove nil? (apply list attrs)))))]
-    ;; (log/debug "NODE: " e)
+        style-elt (if (empty? pseudo-attr-map) nil
+                      (if (nil? ids)
+                        (log/warn (format "Pseudo classes/elements only supported if ID attrib supplied; ignoring"))
+                        (element :style (str/join " " pseudo-styles))))
+
+        _ (log/debug (format "STYLE-elt %s" style-elt))
+
+        e (if style-elt
+            (with-meta (Element. tag (or attrs {}) (or content '()))
+              {:miraj/pseudo style-elt})
+            (Element. tag (or attrs {}) (or content '())))
+        ]
+    (log/debug "NODE: " e (type e))
     e))
 
 (defn cdata [content]

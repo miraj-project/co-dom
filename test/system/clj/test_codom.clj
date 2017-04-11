@@ -1,9 +1,9 @@
 (ns test_codom
   ;; (:refer-clojure :exclude [import])
   (:require [miraj.co-dom :refer :all]
+            [miraj.style :as s]
             :reload))
 
-(element :div {'@lname :name})
 (element :div {:lname :$name})
 
 (element :meta {:name "description"
@@ -19,39 +19,94 @@
 (serialize (element :div :!centered))
 
 (element :div {:$color "blue"})
-(pprint (element :div :#foo {:$link {:background "#ff0"}
-                                :$visited {:background "#fff"}
-                                :$hover {:outline "thin red solid"}
-                                :$active {:background "#00f"}
-                                :$color "green"
-                                :$background-color "red"}))
 
-(element :div {:@lname "Smith"})
+(element :div {::s/color "blue"
+               :foo 99})
 
+(def x
+ (element :div :#foo {::s/color "blue"
+                      ::s/hover {:color "red"}
+                      :foo 99})
+)
+
+(pprint x)
+(pprint (-> x meta :miraj/pseudo))
+
+
+(pprint (element :div :#foo {::s/color "green"
+                             ::s/background-color "red"}))
+
+(def x
+  (element :div :#foo {::s/color "green"
+                       ::s/background-color "red"
+                       ::s/active {:background "#00f"}
+                       ::s/hover {:outline "thin red solid"}}))
+
+(serialize x)
+
+(serialize (-> x meta :miraj/pseudo))
+
+(def x
+  (element :div :#foo {::s/link {:background "#ff0"}
+                       ::s/visited {:background "#fff"}
+                       ::s/hover {:outline "thin red solid"}
+                       ::s/active {:background "#00f"}
+                       ::s/color "green"
+                       ::s/background-color "red"})
+)
+
+(serialize x)
+
+(serialize (-> x meta :miraj/pseudo))
 
 (element :div :#foo.bar.baz!centered)
 
 (element :div :#foo :.bar :.baz :!centered)
 
-(element :div :#foo :.bar :.baz :!centered {:$color "blue"})
+(element :div :#foo :.bar :.baz :!centered {::s/color "blue"})
 
-(element :div :#foo.bar.baz {:$hover {:background "blue"}})
+(element :div :#foo.bar.baz {::s/hover {:background "blue"}})
 
-(element :div :#foo :.bar :.baz :!centered {:$hover {:background "blue"}})
+(element :div :#foo :.bar :.baz :!centered {::s/hover {:background "blue"}})
 
-
-;;;;;;;;;;;;;;;;  binding annotations
+;;;;;;;;;;;;;;;;  binding annotations DEPRECATED - polymer only!
+;; use polymer.dom/lambda and miraj.core/defcomponent binding forms instead
 
 ;; property bindings
 (serialize (element :div {:lname :name.last}))
 (serialize (element :div {:lname 'name.last}))
 
-(element :div {:lname '@name})
-(element :div {'@lname :name})
 
 ;;  attribute bindings
-(serialize (element :div {'@lname :name.last}))
-(serialize (element :div {:lname 'name.last}))
+(def x (element :div {:lname  :name.last
+                      :miraj.polymer/fname "name.first"
+                      :foo.bar/baz "buz"}
+                (element :span "hello")))
+
+(binding [*pprint* true]
+  (println (serialize x)))
+
+(serialize-raw x)
+
+(println (normalize-html-str (pprint x)))
+
+(def x (element :div :#foo {:lname :name.last
+                            :fname$ :name.first
+                            :miraj.style/color "blue"
+                            :miraj.style/hover {:background "red"}}))
+x
+
+(binding [*pprint* true]
+  (println (serialize x)))
+
+(pprint x)
+
+;;(normalize-html-str (serialize-raw x))
+
+(serialize (-> x meta :miraj/pseudo))
+
+
+(serialize (element :div {:$lname 'name.last}))
 
 ;;  content bindings
 (serialize (element :div :lname))
@@ -60,8 +115,8 @@
 ;; void elements
 (element :link {:rel "stylesheet" :href "foo/bar.css"})
 
-;; nesting
 
+;; nesting
 (element :chapter (element :section))
 
 
@@ -95,6 +150,6 @@
 ;; (x/serialize doc)
 
 ;; #_(x/pprint (element :div :#foo.bar!centered
-;;                     {:$background-color "red"
+;;                     {::s/background-color "red"
 ;;                      :bar 99}))
 
