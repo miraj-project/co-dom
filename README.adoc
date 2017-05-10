@@ -391,11 +391,11 @@ convenience syntax is supported:
 
 [source,clojure]
 ----
-(span ::foo) ;;=> <span id="foo"></span>
-(span ::foo.bar) ;;=> <span id="foo" class="bar"></span>
-(span ::foo.bar.baz) ;;=> <span id="foo" class="bar baz"></span>
-(span ::.foo) ;;=> <span class="foo"></span>
-(span ::.foo.bar) ;;=> <span class="foo bar"></span>
+(span :#foo) ;;=> <span id="foo"></span>
+(span :#foo.bar) ;;=> <span id="foo" class="bar"></span>
+(span :#foo.bar.baz) ;;=> <span id="foo" class="bar baz"></span>
+(span :.foo) ;;=> <span class="foo"></span>
+(span :.foo.bar) ;;=> <span class="foo bar"></span>
 ----
 
 This syntax can be used with other attributes, as long as it comes first:

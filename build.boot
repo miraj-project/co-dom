@@ -48,7 +48,7 @@
         (install)
         (target)))
 
-(deftask check
+(deftask dev
   "watch etc. for dev using checkout"
   []
   (comp (watch)
@@ -59,7 +59,7 @@
         (target)
         (install)))
 
-(deftask systest
+(deftask devrepl
   "serve and repl for integration testing"
   []
   (set-env! :resource-paths #(conj % "test/system/clj"))
@@ -73,7 +73,7 @@
    (target)))
 
 (deftask utest
-  "test:"
+  "Unit tests"
   [n namespaces  NS  #{sym}  "test ns"]
   (set-env! :source-paths #(conj % "test/unit/clj"))
   (test :namespaces namespaces
