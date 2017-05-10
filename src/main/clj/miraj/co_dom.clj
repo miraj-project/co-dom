@@ -11,7 +11,7 @@
   miraj.co-dom
   (:refer-clojure :exclude [import require])
   (:require [miraj.style :as style]
-            [clojure.spec :as spec]
+            [clojure.spec.alpha :as spec]
             [clojure.string :as str]
             [clojure.data.json :as json]
             ;; [cheshire.core :as json :refer :all]
@@ -39,7 +39,7 @@
            ;; [miraj NSException]))
 ;;           [java.util Date]))
 
-(println "loading miraj.co-dom")
+;; (println "loading miraj.co-dom")
 ;;FIXME:  support comment nodes
 
 (defonce mode (atom nil))
@@ -391,21 +391,9 @@
       ;; (prn "PPRINT OUTPUT: " result)
       result)))
 
-(defn pprint
-  [& elts]
-  ;; (println "PPRINT elts: " elts)
-  (if (keyword? (first elts))
-    (do ;;(println "fnext elts: " (fnext elts))
-        (if (nil? (fnext elts))
-          nil
-          (apply pprint-impl elts)))
-    (do ;;(println "first elts: " (first elts))
-        (if (nil? (first elts))
-          nil
-          (pprint-impl (first elts))))))
-
 (defn normalize-html-str
   [s]
+  ;; (log/trace "normalize-html-str" s)
   (let [result (if (= :html @mode)
                  (let [s (str/replace s #"<CODOM_56477342333109>" "")
                        s (str/replace s #"</CODOM_56477342333109>" "")
@@ -430,6 +418,19 @@
     ;; (prn "OUTPUT: " result)
     result))
 
+(defn pprint
+  [& elts]
+  ;; (println "PPRINT elts: " elts)
+  (if (keyword? (first elts))
+    (do ;;(println "fnext elts: " (fnext elts))
+        (if (nil? (fnext elts))
+          nil
+          (normalize-html-str (apply pprint-impl elts))))
+    (do ;;(println "first elts: " (first elts))
+        (if (nil? (first elts))
+          nil
+          (normalize-html-str (pprint-impl (first elts)))))))
+
 (defn serialize-impl
   [& elts]
   ;; (println "serialize-impl: " elts)
@@ -451,7 +452,8 @@
                (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        ;; _ (log/debug (format "SERIALIZE-IMPL serialized: %s" ml))
+        _ (log/trace "SERIALIZE-IMPL serialized:" ml)
+
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -497,7 +499,7 @@
       ;; (prn "SERIALIZE OUTPUT: " result)
       result)))
 
-(declare emit)
+(declare emit flatten-elements)
 
 (defn serialize-raw
   "Serializes the Element to String and returns it.
@@ -517,7 +519,7 @@
         ^java.io.StringWriter
         string-writer (java.io.StringWriter.)]
     (reset! mode fmt)
-    ;; (println "serializing to" @mode ": " args)
+    ;; (log/debug "serializing to" @mode ": " args)
     (let [doc-str (cond
                     (= @mode :html)
                     (do ;(log/trace "emitting HTML:" args)
@@ -529,13 +531,13 @@
                     ;; (emit args string-writer :html true :with-xml-declaration false))
 
                     (= @mode :xml)
-                    (do ;;(println "emiting XML")
+                    (do ;; (log/debug "emiting XML")
                       ;; (apply serialize-impl elts))
                       (.toString
                        (if (= :with-xml-declaration (first args))
                          (do ;(log/trace "emitting with xml decl: " args)
                            (emit (rest args) string-writer :with-xml-declaration true))
-                         (do ;(log/trace "emitting w/o xml decl: " args)
+                         (do ;; (log/trace "emitting w/o xml decl: " args)
                            (emit args string-writer :with-xml-declaration false)))))
                     :else
                     (throw (Exception. "invalid mode: " @mode)))]
@@ -554,7 +556,8 @@
     :with-xml-declaration <bool>, default false"
   ;; [& args]
   [& elts]
-  (normalize-html-str (serialize-raw elts)))
+  (let [s (serialize-raw elts)]
+    (normalize-html-str s)))
 
 (defn emit-start-tag [event ^javax.xml.stream.XMLStreamWriter writer]
   ;;(println "emit-start-tag: " (:name event))
@@ -645,6 +648,8 @@
 (extend-protocol EventGeneration
   Element
   (gen-event [element]
+    ;; (if (-> element meta :miraj/pseudo)
+    ;;   (log/trace "BINGO"))
     ;; (if (= (:tag element) :link)
     ;;   (Event. :void-element (:tag element) (:attrs element) nil)
       (Event. :start-element (:tag element) (:attrs element) nil)) ;)
@@ -655,10 +660,17 @@
         ;(log/debug "NEXT content:" (:content element))
         ;(if (= (:tag element) :link)
          ; next-items
-        (let [result (cons (:content element)
-                           (cons (Event. :end-element (:tag element) nil nil) next-items))]
-          ;(log/debug "NEXT-EVENTS RESULT:" result)
-          result)))
+      (let [pseudo (if-let [pseudo (-> element meta :miraj/pseudo)]
+                     (do ;; (log/trace "PSEUDO:" pseudo)
+                         (flatten-elements (list pseudo))))
+            ;; _ (log/trace "PSEUDO EVT" pseudo)
+
+            result (let [content (:content element)
+                         tail (Event. :end-element (:tag element) nil nil)]
+                     (if pseudo (concat content (concat (cons tail pseudo) next-items))
+                         (cons content (cons tail next-items))))]
+        ;;(if pseudo (log/trace "RESULT:" result))
+        result)))
 
   Event
   (gen-event [event] event)
@@ -755,14 +767,14 @@
     next-items))
 
 (defn flatten-elements [elements]
-  ;; (log/debug "FLATTEN-elements:" elements)
+  ;; (log/trace "FLATTEN-elements:" elements)
   ;; (prn elements)
   (when (seq elements)
     (lazy-seq
      (let [e (first elements)]
-       ;; (log/debug "FLATten:" (seq e))
+       ;;(log/trace "FLATten:" e)
        (let [f (gen-event e)]
-         ;; (log/debug "GENNED EVT:" f)
+         ;;(log/trace "GENNED EVT:" f)
          (cons f
                (flatten-elements (next-events e (rest elements)))))))))
 
@@ -902,7 +914,7 @@
   ;; FIXME: support maps as values
   ;; FIXME: handle html5 custom attrs, data-*
   ;; list of attrs:  http://w3c.github.io/html/fullindex.html#attributes-table
-  (log/debug (format "NORMALIZE-attributes %s %s" tag attrs))
+  ;; (log/debug (format "NORMALIZE-attributes %s %s" tag attrs))
   (if (instance?  miraj.co_dom.Element attrs)
     (do ;; (log/debug "Element instance")
       [{} (remove empty? (list attrs content))])
@@ -929,30 +941,33 @@
                                               ;; FIXME: why did we dissoc :content?
                                               ;; (dissoc attrs :content))))
                                               attrs)))
-          _ (log/debug (format "NON-STYLE Attrs  %s" non-style-attrs))
+          ;; _ (log/debug (format "NON-STYLE Attrs  %s" non-style-attrs))
 
-          attrib-bindings (apply hash-map
-                                  (flatten (filter (fn [[k v]]
-                                                     ;; (log/debug (format "KV %s %s" k v))
-                                                     (let [attr-ns (namespace k)
-                                                           attr-name (name k)]
-                                                       (not (nil? attr-ns))
-                                                       #_(= attr-ns "miraj.polymer")))
-                                                       ;; (str/ends-with? attr-name "$")))
-                                                   attrs)))
-          attrib-bindings ;; {::attrib-binding
-                           (into {} (map (fn [[k v]]
-                                  (let [nm (clojure.core/name k)]
-                                    ;; {(keyword (subs nm 0 (str/last-index-of nm \$)))
-                                    {(keyword nm)
-                                     (keyword (namespace k) (clojure.core/name v))}))
-                                attrib-bindings))
-          ;;}
-          _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
+          ;; FIXME: what is attrib-bindings for???
+          ;; attrib-bindings (apply hash-map
+          ;;                         (flatten (filter (fn [[k v]]
+          ;;                                            (log/debug (format "KV %s %s" k v))
+          ;;                                            (let [attr-ns (namespace k)
+          ;;                                                  attr-name (name k)]
+          ;;                                              (not (nil? attr-ns))
+          ;;                                              #_(= attr-ns "miraj.polymer")))
+          ;;                                              ;; (str/ends-with? attr-name "$")))
+          ;;                                          attrs)))
+          ;; _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
+
+          ;; attrib-bindings ;; {::attrib-binding
+          ;;                  (into {} (map (fn [[k v]]
+          ;;                         (let [nm (clojure.core/name k)]
+          ;;                           ;; {(keyword (subs nm 0 (str/last-index-of nm \$)))
+          ;;                           {(keyword nm)
+          ;;                            (keyword (namespace k) (clojure.core/name v))}))
+          ;;                       attrib-bindings))
+          ;; ;;}
+          ;; _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
 
           plain-style-attrs (apply hash-map
                               (flatten (filter (fn [[k v]]
-                                                 (log/debug (format "KV %s %s" k v))
+                                                 ;; (log/debug (format "KV %s %s" k v))
                                                  (and (not (contains? style/pseudo-attrs k))
                                                       (let [attr-ns (namespace k)
                                                             attr-name (name k)
@@ -961,11 +976,11 @@
                                                         (= attr-ns "miraj.style"))))
                                                         ;;(= c \$))))
                                                  attrs)))
-          _ (log/debug (format "PLAIN STYLE attrs %s empty? %s"
-                               plain-style-attrs (empty? plain-style-attrs)))
+          ;; _ (log/debug (format "PLAIN STYLE attrs %s empty? %s"
+          ;;                      plain-style-attrs (empty? plain-style-attrs)))
 
           pseudo-style-attrs (into {} (filter #(contains? style/pseudo-attrs (first %)) attrs))
-          _ (log/debug (format "PSEUDO_STYLE_ATTRS %s" pseudo-style-attrs))
+          ;; _ (log/debug (format "PSEUDO_STYLE_ATTRS %s" pseudo-style-attrs))
 
           ;; plain-style-attrs (filter #(not (contains? pseudo-attrs (first %))) style-attrs)
           ;; _ (log/debug (format "PLAIN-STYLE-ATTRS %s" (seq plain-style-attrs)))
@@ -979,7 +994,7 @@
                                             ;; (str (subs (name k) 1) ":" v ";"))))})
           ;; plain-style-attrs (filter #(not= (first %) "miraj.style") plain-style-attrs)
 
-          _ (log/debug (format "PLAIN-STYLE-ATTRS  %s" (seq plain-style-attrs)))
+          ;; _ (log/debug (format "PLAIN-STYLE-ATTRS  %s" (seq plain-style-attrs)))
 
           ;; style-str (str (if (not (nil? pseudo-style-str)) "{")
           ;;                plain-style-str
@@ -987,9 +1002,9 @@
           ;;                pseudo-style-str)
           ;; _ (log/debug (format "STYLE-STR %s" style-str))
 
-          valids (merge plain-style-attrs non-style-attrs attrib-bindings)
+          valids (merge plain-style-attrs non-style-attrs) ;; attrib-bindings)
           ]
-      (log/debug (format "VALIDS %s" valids))
+      ;; (log/debug (format "VALIDS %s" valids))
       [valids pseudo-style-attrs])))
 
 ;; (defn parse-elt-args
@@ -1032,9 +1047,15 @@
 ;;         :else (do ;;(println "NOT map attrs: " attrs)
 ;;                 [{} (remove empty? (list attrs content))])))))
 
+(defn ->css [m]
+  (str "{" (str/join ";" (for [[k v] m]
+                           (str (clojure.core/name k) ":"
+                                (if (= k :content) (str "'" v "'") v))))
+       "}"))
+
 (defn element
   [tag & args]
-  ;; (log/debug "ELEMENT: " tag) ;; " ARGS: " args)
+  ;; (log/trace "ELEMENT: " tag) ;; " ARGS: " args)
   ;; (log/debug (format "ARGS %s" args))
   (let [;; args (first args)
 
@@ -1056,17 +1077,17 @@
         ;; _ (log/debug (format "Content %s" (seq content)))
 
         [attr-map pseudo-attr-map] (normalize-attributes tag attr-map content)
-        _ (log/debug (format "Attr-map %s" attr-map))
-        _ (log/debug (format "Pseudo-Attr-map %s" pseudo-attr-map))
+        ;; _ (log/debug (format "Attr-map %s" attr-map))
+        ;; _ (log/debug (format "Pseudo-Attr-map %s" pseudo-attr-map))
 
-        ids (let [c1 (:id attr-map)
+        id (let [c1 (:id attr-map)
                   c2 (:id specials-map)
                   ids (remove nil? [c1 c2])]
               ;; (log/debug (format "ID COUNT %s %s" id (count (str/split #" " id))))
               (if (> (count ids)
                      1) (throw (Exception. (format "Only one ID allowed: %s" ids))))
               (first ids))
-        _ (log/debug (format "IDS: %s %s" ids (nil? ids)))
+        ;; _ (log/debug (format "ID: %s" id))
 
         classes (let [c1 (:class attr-map)
                       c2 (:class specials-map)]
@@ -1081,22 +1102,25 @@
         ;; _ (log/debug (format "Attrs %s" attrs))
 
         pseudo-styles (for [[k v] (seq pseudo-attr-map)]
-                        (str "#" ids ":" (clojure.core/name k) " " v))
-        _ (log/debug (format "PSEUDO-styles %s" (seq pseudo-styles)))
+                        (str "#" id ":" (clojure.core/name k) " " (->css v)))
+        ;; _ (log/debug (format "PSEUDO-styles %s" (seq pseudo-styles)))
 
         style-elt (if (empty? pseudo-attr-map) nil
-                      (if (nil? ids)
+                      (if (nil? id)
                         (log/warn (format "Pseudo classes/elements only supported if ID attrib supplied; ignoring"))
-                        (element :style (str/join " " pseudo-styles))))
-
-        _ (log/debug (format "STYLE-elt %s" style-elt))
+                        (Element. :style {} (list (str/join " " pseudo-styles)))))
+        ;; _ (log/trace "STYLE-elt" style-elt)
 
         e (if style-elt
             (with-meta (Element. tag (or attrs {}) (or content '()))
               {:miraj/pseudo style-elt})
             (Element. tag (or attrs {}) (or content '())))
+        ;; elt (Element. tag (or attrs {}) (or content '()))
+        ;; e (if style-elt
+        ;;     (list elt style-elt)
+        ;;     elt)
         ]
-    (log/debug "NODE: " e (type e))
+    #_(log/debug "NODE: " e (meta e))
     e))
 
 (defn cdata [content]
@@ -1334,7 +1358,7 @@
     :encoding <str>          Character encoding to use
     :with-xml-declaration <bool>, default false"
   [e ^java.io.Writer writer & {:as opts}]
-  ;; (log/debug "EMIT: " e " OPTS: " opts)
+  ;;(log/trace "EMIT: " e " OPTS: " opts)
   (let [^javax.xml.stream.XMLStreamWriter
         stream-writer (-> (javax.xml.stream.XMLOutputFactory/newInstance)
                           (.createXMLStreamWriter writer))]
@@ -2340,4 +2364,4 @@
   (list 'clj->js form))
 
 
-(println "loaded miraj.co-dom")
+;; (println "loaded miraj.co-dom")
