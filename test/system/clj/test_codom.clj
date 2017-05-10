@@ -13,9 +13,11 @@
 ;;;;;;;;;;;;;;;; special keyword attribs:  :#foo  :.foo  :!foo  :$foo  :@foo
 
 (element :div :#foo)
+
 (element :div :.bar.baz)
 
 (element :div :!centered)
+
 (serialize (element :div :!centered))
 
 (element :div {:$color "blue"})
@@ -35,6 +37,13 @@
 
 (pprint (element :div :#foo {::s/color "green"
                              ::s/background-color "red"}))
+
+(element :div {:context-menu "foo"})
+
+(element :span :#foo1 {::s/color "blue"
+                         ::s/hover {:color "red"}
+                         }
+                 " World")
 
 (def x
   (element :div :#foo {::s/color "green"

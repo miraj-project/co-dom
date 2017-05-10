@@ -10,10 +10,10 @@
       :author "Gregg Reynolds"}
   miraj.co-dom.attrs-test
   (:refer-clojure :exclude [import require])
-  (:require ;;[org.clojure/clojure "1.8.0-RC4"]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.test :refer :all]
 ;;            [miraj.html :as h]
+            [miraj.style :as s]
             [miraj.co-dom :refer :all]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -43,7 +43,7 @@
   (testing "OBSOLETE: HTML attr names are case-insensitive.  Currently we only allow camel-case (lower-case with dashes); this will be relaxed in a later version."
     (let [e (element :div {:fooBar "baz"})]
       (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:fooBar "baz"}, :content ()}))
-      (is (= (serialize :xml e) "<div fooBar=\"baz\"></div>"))
+      (is (= (serialize e) "<div fooBar=\"baz\"></div>"))
       #_(is (thrown-with-msg? Exception #"HTML attribute names are case-insensitive; currently, only lower-case is allowed."
                             (serialize e)))
       #_(is (thrown? Exception (serialize (element :div {:aB "foo"})))))))
@@ -52,7 +52,7 @@
   (testing "OBSOLETE: HTML serialization converts clojure-case attr names."
     (let [e (element :div {:context-menu "foo"})]
       (is (= e #miraj.co_dom.Element{:tag :div, :attrs {:context-menu "foo"}, :content ()}))
-      (is (= (serialize :xml e) "<div context-menu=\"foo\"></div>"))
+      #_(is (= (serialize :xml e) "<div context-menu=\"foo\"></div>"))
       #_(is (= (serialize e) "<div contextmenu=\"foo\"></div>")))))
 
 ;; (deftest ^:attrs bool-2
@@ -131,15 +131,15 @@ NB: NOT YET IMPLEMENTED"
            (serialize e)))))
 
 (deftest ^:attrs style-sugar-1
-  (let [e (element :div {:$color "red"} "hello")]
+  (let [e (element :div {::s/color "red"} "hello")]
     (is (= "<div style=\"color:red;\">hello</div>"
            (serialize e)))))
 
 ;; pseudo elts also supported
 (deftest ^:attrs style-sugar-2
-  (let [e (element :div :#foo {:$hover {:background "blue"}
-                               :background "green"} "hello")]
-    (is (= "<div id=\"foo\">hello</div>"
+  (let [e (element :div :#foo {::s/hover {:background "blue"}
+                               ::s/background "green"} "hello")]
+    (is (= "<div style=\"background:green;\" id=\"foo\">hello</div>"
            (serialize e)))))
 
 ;; special kws concatenate
@@ -161,17 +161,17 @@ NB: NOT YET IMPLEMENTED"
            (serialize e)))))
 
 (deftest ^:attrs sugars-3
-  (let [e (element :div :#foo :.bar :.baz :!centered {:$color "blue"})]
+  (let [e (element :div :#foo :.bar :.baz :!centered {::s/color "blue"})]
     (is (= "<div style=\"color:blue;\" id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
 #_(deftest ^:attrs sugars-4
-  (let [e (element :div :#foo.bar.baz {:$hover {:background "blue"}})]
+  (let [e (element :div :#foo.bar.baz {::s/hover {:background "blue"}})]
     (is (= x
            (serialize e)))))
 
 #_(deftest ^:attrs sugars-5
-  (let [e (element :div :#foo :.bar :.baz :!centered {:$hover {:background "blue"}})]
+  (let [e (element :div :#foo :.bar :.baz :!centered {::s/hover {:background "blue"}})]
     (is (= x
            (serialize e)))))
 
