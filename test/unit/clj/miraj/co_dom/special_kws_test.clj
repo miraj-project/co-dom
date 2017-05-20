@@ -17,7 +17,7 @@
 ;;    :#foo         =>  {:id "foo"}
 ;;    :.foo.bar     =>  {:class "foo bar"}
 ;;    :!foo         =>  {:foo __BOOLEAN}
-;;    :{$foo "bar"} =>  {:style "foo:bar;"}
+;;    {:miraj.style/foo "bar"} =>  {:style "foo:bar;"}
 
 (deftest ^:docs specials-id
   (let [frag1 (element :foo :#bar)
