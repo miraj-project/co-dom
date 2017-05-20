@@ -19,14 +19,14 @@
                                                       com.sun.jmx/jmxri]]
 
                    ;; testing only
-                   ;; [miraj/core "0.1.0-SNAPSHOT" :scope "test"]
-                   ;; [miraj/html "5.1.0-SNAPSHOT" :scope "test"]
+                   ;; [miraj/core "0.1.0-SNAPSHOT"          :scope "test"]
+                   ;; [miraj/html "5.1.0-SNAPSHOT"          :scope "test"]
                    ;; [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
-                   ;; [miraj.polymer/iron "1.2.3-SNAPSHOT" :scope "test"]
+                   ;; [miraj.polymer/iron "1.2.3-SNAPSHOT"  :scope "test"]
 
-                   [pandeiro/boot-http "0.7.3"           :scope "test"]
-                   [samestep/boot-refresh "0.1.0" :scope "test"]
-                   [adzerk/boot-test "1.2.0" :scope "test"]])
+                   [pandeiro/boot-http "0.7.3"              :scope "test"]
+                   [samestep/boot-refresh "0.1.0"           :scope "test"]
+                   [adzerk/boot-test "1.2.0"                :scope "test"]])
 
 (require '[adzerk.boot-test :refer :all]
          '[pandeiro.boot-http :as http :refer :all]
