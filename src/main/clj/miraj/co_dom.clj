@@ -279,10 +279,13 @@
 (def js-optimizer "miraj/co_dom/optimize-js.xsl")
 
 (defn xsl-xform
-  [ss elts]
-  ;; (println "xsl-xform ss: " ss)
+  [stylesheet-name elts]
+  (log/info "xsl-xform ss: " stylesheet-name)
   ;; (println "xsl-xform doc: " elts)
-  (let [ml (do
+  (let [r (io/resource (str "miraj/co_dom/" stylesheet-name ".xsl"))
+        xsl (slurp r)
+        ;; _ (log/trace "Stylesheet:" xsl)
+        ml (do
              (if (not (instance? miraj.co_dom.Element elts)) ;
                (do ;;(println (type elts))
                    (throw (Exception. "xsl-xform only works on miraj.co-dom.Element"))))
@@ -291,9 +294,9 @@
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
         factory (TransformerFactory/newInstance)
-        transformer (let [r (io/resource ss)
-                          xsl (slurp r)]
-                      (.newTransformer factory (StreamSource. (StringReader. xsl))))
+        transformer (.newTransformer factory (StreamSource. (StringReader. xsl)))
+        ;; (let [r (io/resource ss)
+        ;;                   xsl (slurp r)]
         ;;(.newTransformer factory (StreamSource. (StringReader. ss)))
         ]
     ;; (.setOutputProperty transformer OutputKeys/INDENT "yes")
@@ -355,28 +358,6 @@
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
 
-    ;; (.transform transformer xmlSource xmlOutput)
-    ;; (println (if (= :html fmt)
-    ;;            ;(str/replace (.toString (.getWriter xmlOutput)) #"VOID_333109<[^>]+>" "")
-    ;;            (let [string-writer (.getWriter xmlOutput)
-    ;;                  s (.toString string-writer)
-    ;;                  void (.flush string-writer)
-    ;;                  s (str/replace s #"<CODOM_56477342333109>\n" "")
-    ;;                  s (str/replace s #"</CODOM_56477342333109>\n" "")
-    ;;                  s (str/replace s #"VOID_333109<[^>]+>" "")
-    ;;                  s (str/replace s #"_EMPTY_333109" "")
-    ;;                  s (str/replace s #"^_([^=]*)=" "$1\\$=")
-    ;;                  s (str/replace s #"<!\[CDATA\[" "")
-    ;;                  s (str/replace s #"]]>" "")
-    ;;                  s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
-    ;;                  s (str/replace s
-    ;;                                 (re-pattern (str "=\""
-    ;;                                                  miraj-polymer-attrib-binding-flag
-    ;;                                                  " *\\{\\{miraj.polymer/"))
-    ;;                                 "\\$=\"\\{\\{")
-    ;;                  ]
-    ;;              s)
-    ;;            (.toString (.getWriter xmlOutput))))))
     (.transform transformer xmlSource xmlOutput)
     (let[result (if (= :html fmt)
                   (let [string-writer (.getWriter xmlOutput)
@@ -433,7 +414,7 @@
 
 (defn serialize-impl
   [& elts]
-  ;; (println "serialize-impl: " elts)
+  ;; (log/debug "serialize-impl: " elts)
   (let [s (if (or (= :html (first elts))
                   (= :xml (first elts)))
             (do ;(log/trace "FIRST ELT: " (first elts) " " (keyword? (first elts)))
@@ -452,7 +433,7 @@
                (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        _ (log/trace "SERIALIZE-IMPL serialized:" ml)
+        ;; _ (log/trace "SERIALIZE-IMPL serialized:" ml)
 
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
@@ -461,6 +442,7 @@
                        (.write sw "<!doctype html>"))
                      sw))
         factory (TransformerFactory/newInstance)
+        ;; _ (log/trace "MODE:" @mode)
         transformer (if (= :html @mode)
                       (let [r (io/resource "miraj/co_dom/identity-html.xsl")
                             xsl (slurp r)]
@@ -484,7 +466,6 @@
     (if (.startsWith ml "<?xml")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "no")
       (.setOutputProperty transformer OutputKeys/OMIT_XML_DECLARATION "yes"))
-
     (.transform transformer xmlSource xmlOutput)
     (let[result (if (= :html fmt)
                   (let [string-writer (.getWriter xmlOutput)
@@ -509,7 +490,7 @@
     :with-xml-declaration <bool>, default false"
   ;; [& args]
   [& elts]
-  ;; (println "serialize: " elts)
+  ;; (log/debug "SERIALIZE-RAW: " elts)
   (let [args (if (or (= :html (first elts)) (= :xml (first elts)))
                (rest elts)
                (if (keyword? (first elts))
@@ -531,7 +512,7 @@
                     ;; (emit args string-writer :html true :with-xml-declaration false))
 
                     (= @mode :xml)
-                    (do ;; (log/debug "emiting XML")
+                    (do ;; (log/debug "emitting XML")
                       ;; (apply serialize-impl elts))
                       (.toString
                        (if (= :with-xml-declaration (first args))
@@ -654,22 +635,28 @@
     ;;   (Event. :void-element (:tag element) (:attrs element) nil)
       (Event. :start-element (:tag element) (:attrs element) nil)) ;)
   (next-events [element next-items]
-    (do ;(log/debug "NEXT evt: " (:tag element))
-        ;(log/debug "NEXT element:" element)
-        ;(log/debug "NEXT items:" next-items)
-        ;(log/debug "NEXT content:" (:content element))
+    (do ;; (log/debug "NEXT element:" element)
+        ;; (log/debug "NEXT items:" next-items)
+        ;; (log/debug "NEXT content:" (:content element))
         ;(if (= (:tag element) :link)
          ; next-items
+      ;; deal with pseudo elts and classes (e.g. ::s/hover)
       (let [pseudo (if-let [pseudo (-> element meta :miraj/pseudo)]
                      (do ;; (log/trace "PSEUDO:" pseudo)
                          (flatten-elements (list pseudo))))
-            ;; _ (log/trace "PSEUDO EVT" pseudo)
+            ;; _ (log/trace "PSEUDO FLATTENED" pseudo)
 
             result (let [content (:content element)
                          tail (Event. :end-element (:tag element) nil nil)]
-                     (if pseudo (concat content (concat (cons tail pseudo) next-items))
+                     ;; (log/trace "ELEMENT:" element)
+                     ;; (log/trace "CONTENT:" content)
+                     ;; (log/trace "TAIL:" tail)
+             (if pseudo (concat (if (empty? content)
+                                  (list '())
+                                  content)
+                                  (concat (cons tail pseudo) next-items))
                          (cons content (cons tail next-items))))]
-        ;;(if pseudo (log/trace "RESULT:" result))
+        ;; (if pseudo (log/trace "RESULT:" result))
         result)))
 
   Event
@@ -1120,7 +1107,7 @@
         ;;     (list elt style-elt)
         ;;     elt)
         ]
-    #_(log/debug "NODE: " e (meta e))
+    ;; (log/debug "NODE (with meta): " e (meta e))
     e))
 
 (defn cdata [content]
@@ -1547,7 +1534,7 @@
 
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  (println "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
+  ;; (log/trace "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))
         newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds}) ;; :uri uri :_webcomponent true})
                        (fn [& args]
@@ -1559,9 +1546,10 @@
                                            [attrs content] (parse-elt-args first rest)]
                                        (apply element elt-kw attrs content)))]
                            elt)))]
-    ;; (println "NS-SYM: " ns-sym)
-    ;; (println "NM-SYM: " nm-sym)
-    ;; (println "VAR: " newvar)
+    ;; (log/trace "NS-SYM: " ns-sym)
+    ;; (log/trace "NM-SYM: " nm-sym)
+    ;; (log/trace "VAR: " newvar)
+    ;; (log/trace "HTML var:" (deref newvar))
     newvar))
   ;; (alter-meta! (find-var ns-sym nm-sym)
   ;;              (fn [old new]

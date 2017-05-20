@@ -138,8 +138,10 @@ NB: NOT YET IMPLEMENTED"
 ;; pseudo elts also supported
 (deftest ^:attrs style-sugar-2
   (let [e (element :div :#foo {::s/hover {:background "blue"}
-                               ::s/background "green"} "hello")]
-    (is (= "<div style=\"background:green;\" id=\"foo\">hello</div>"
+                               ::s/background "green"} "hello")
+        ;; since ::s/hover adds a style element, we must wrap e, or serialize will choke
+        e (element :div e)]
+    (is (= "<div><div style=\"background:green;\" id=\"foo\">hello</div><style>#foo:hover {background:blue}</style></div>"
            (serialize e)))))
 
 ;; special kws concatenate
@@ -165,14 +167,17 @@ NB: NOT YET IMPLEMENTED"
     (is (= "<div style=\"color:blue;\" id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
-#_(deftest ^:attrs sugars-4
-  (let [e (element :div :#foo.bar.baz {::s/hover {:background "blue"}})]
-    (is (= x
+(deftest ^:attrs sugars-4
+  (let [e (element :div :#foo.bar.baz {::s/hover {:background "blue"}})
+        e (element :div e)
+        ]
+    (is (= "<div><div id=\"foo\" class=\"bar baz\"></div><style>#foo:hover {background:blue}</style></div>"
            (serialize e)))))
 
-#_(deftest ^:attrs sugars-5
-  (let [e (element :div :#foo :.bar :.baz :!centered {::s/hover {:background "blue"}})]
-    (is (= x
+(deftest ^:attrs sugars-5
+  (let [e (element :div :#foo :.bar :.baz :!centered {::s/hover {:background "blue"}} "hi")
+        e (element :div e)]
+    (is (= "<div><div id=\"foo\" class=\"bar baz\" centered>hi</div><style>#foo:hover {background:blue}</style></div>"
            (serialize e)))))
 
 
