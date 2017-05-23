@@ -116,17 +116,17 @@ NB: NOT YET IMPLEMENTED"
     (is (= (serialize (element :span :#foo.bar "baz")) "<span id=\"foo\" class=\"bar\">baz</span>"))))
 
 ;; Boolean attributes.  An HTML boolean attribute is an attribute
-;; without a value.  Use :!
+;; without a value.  Use :?
 (deftest ^:attrs bool-sugar-1
-  (let [e (element :body :!unresolved)]
+  (let [e (element :body :?unresolved)]
     (is (= "<body unresolved></body>" (serialize e)))))
 
 (deftest ^:attrs bool-sugar-2
-  (let [e (element :div :!centered {:foo 99} "bar")]
+  (let [e (element :div :?centered {:foo 99} "bar")]
     (is (= "<div foo=\"99\" centered>bar</div>" (serialize e)))))
 
 (deftest ^:attrs bool-sugar-3
-  (let [e (element :div :!centered!horizontal)]
+  (let [e (element :div :?centered?horizontal)]
     (is (= "<div centered horizontal></div>"
            (serialize e)))))
 
@@ -146,24 +146,24 @@ NB: NOT YET IMPLEMENTED"
 
 ;; special kws concatenate
 (deftest ^:attrs sugars-1
-  (let [e (element :div :#foo.bar.baz!centered)]
+  (let [e (element :div :#foo.bar.baz?centered)]
     (is (= "<div id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
 ;; order is insignificant
 (deftest ^:attrs sugars-2
-  (let [e (element :div :.bar#foo!centered.baz)]
+  (let [e (element :div :.bar#foo?centered.baz)]
     (is (= "<div id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
 ;; special kws need not be concatenated
 (deftest ^:attrs sugars-2
-  (let [e (element :div :#foo :.bar :.baz :!centered)]
+  (let [e (element :div :#foo :.bar :.baz :?centered)]
     (is (= "<div id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
 (deftest ^:attrs sugars-3
-  (let [e (element :div :#foo :.bar :.baz :!centered {::s/color "blue"})]
+  (let [e (element :div :#foo :.bar :.baz :?centered {::s/color "blue"})]
     (is (= "<div style=\"color:blue;\" id=\"foo\" class=\"bar baz\" centered></div>"
            (serialize e)))))
 
@@ -175,7 +175,7 @@ NB: NOT YET IMPLEMENTED"
            (serialize e)))))
 
 (deftest ^:attrs sugars-5
-  (let [e (element :div :#foo :.bar :.baz :!centered {::s/hover {:background "blue"}} "hi")
+  (let [e (element :div :#foo :.bar :.baz :?centered {::s/hover {:background "blue"}} "hi")
         e (element :div e)]
     (is (= "<div><div id=\"foo\" class=\"bar baz\" centered>hi</div><style>#foo:hover {background:blue}</style></div>"
            (serialize e)))))

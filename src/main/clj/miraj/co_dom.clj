@@ -280,9 +280,11 @@
 
 (defn xsl-xform
   [stylesheet-name elts]
-  (log/info "xsl-xform ss: " stylesheet-name)
+  ;; (log/info "xsl-xform ss: " stylesheet-name)
   ;; (println "xsl-xform doc: " elts)
-  (let [r (io/resource (str "miraj/co_dom/" stylesheet-name ".xsl"))
+  (let [fname (str "miraj/co_dom/" stylesheet-name ".xsl")
+        ;; _ (log/trace "FNAME:" fname)
+        r (io/resource fname)
         xsl (slurp r)
         ;; _ (log/trace "Stylesheet:" xsl)
         ml (do
@@ -792,7 +794,7 @@
        (let [tokstr (name tok)]
          (or (.startsWith tokstr "#")
              (.startsWith tokstr ".")
-             (.startsWith tokstr "!")))))
+             (.startsWith tokstr "?")))))
 
 (defn- validate-kw-attrib
   [tag attr]
@@ -805,9 +807,9 @@
   ;; (log/info "VALIDATE-KW-ATTRIB: " attr)
   (if (nil? (namespace attr)) ;; (span :foo) => <span>[[foo]]</span>
     (let [token (name attr)]
-      (if (or (.startsWith token "#") (.startsWith token ".") (.startsWith token "!"))
+      (if (or (.startsWith token "#") (.startsWith token ".") (.startsWith token "?"))
         (let [tokens (str/split
-                      (str/trim (str/replace token #"(#|\.|\!)" " $1")) #" ")
+                      (str/trim (str/replace token #"(#|\.|\?)" " $1")) #" ")
               ;; _ (log/debug (format "TOKENS %s => %s" attr tokens))
 
               id-tokens (filter (fn [t] (str/starts-with? t "#")) tokens)
@@ -823,7 +825,7 @@
                               {} {:class (str/join " " class-tokens)})
               ;; _ (log/debug (format "CLASS ATTRIBS %s" class-attribs))
 
-              boolean-tokens (filter (fn [t] (str/starts-with? t "!")) tokens)
+              boolean-tokens (filter (fn [t] (str/starts-with? t "?")) tokens)
               boolean-tokens (map (fn [t] (subs t 1)) boolean-tokens)
               ;; _ (log/debug (format "BOOLEAN TOKENS %s" (seq boolean-tokens)))
               boolean-attribs (if (empty? boolean-tokens)
@@ -838,7 +840,7 @@
     ;;       ;; (log/debug (format "RESULT ATTRIBS %s" attribs))
     ;;       ;; (let [is-id (.startsWith token "#")
     ;;       ;;       is-class (.startsWith token ".")
-    ;;       ;;       is-boolean (.startsWith token ""!")
+    ;;       ;;       is-boolean (.startsWith token ""?")
     ;;       ;;       classes (filter identity (str/split token #"\."))
     ;;       ;;       attr (first classes)
     ;;       ;;       ;; (doall classes)
@@ -1005,7 +1007,7 @@
 ;;                                      (let [tokstr (name tok)]
 ;;                                        (or (.startsWith tokstr "#")
 ;;                                            (.startsWith tokstr ".")
-;;                                            (.startsWith tokstr "!")))))
+;;                                            (.startsWith tokstr "?")))))
 ;;                               content)
 ;;           content (filter (fn [tok]
 ;;                             (or (not (keyword? tok))
@@ -1013,7 +1015,7 @@
 ;;                                 (let [tokstr (name tok)]
 ;;                                   (not (or (.startsWith tokstr "#")
 ;;                                            (.startsWith tokstr ".")
-;;                                            (.startsWith tokstr "!"))))))
+;;                                            (.startsWith tokstr "?"))))))
 ;;                           content)]
 ;;       ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
 ;;       ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
