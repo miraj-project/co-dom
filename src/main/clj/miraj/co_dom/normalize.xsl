@@ -64,7 +64,7 @@
   ;;     "<xsl:element name='link'>
   ;;       "<xsl:attribute name='rel'>import</xsl:attribute>
   ;;       "<xsl:attribute name='href'>
-  ;;         "<xsl:text>/bower_components/polymer/polymer.html</xsl:text>
+  ;;         "<xsl:text>/miraj/polymer/assets/polymer/polymer.html</xsl:text>
   ;;       "</xsl:attribute>
   ;;     "</xsl:element>
   ;; "</xsl:template>
