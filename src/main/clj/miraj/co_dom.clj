@@ -197,13 +197,13 @@
                        ;;                           k " " v "}; valid values are: "
                        ;;                           html5-link-types))))
 
-                       (keyword? v)
-                       (do ;;(println "KEYWORD")
-                         (if (nil? (namespace v))
-                           (str "{{" (get-two-way-token v) "}}")
-                           ;;FIXME
-                           (str  ;;miraj-polymer-attrib-binding-flag
-                                 "{{" (subs (str v) 1) "}}")))
+                       ;; (keyword? v)
+                       ;; (do ;;(println "KEYWORD")
+                       ;;   (if (nil? (namespace v))
+                       ;;     (str "{{" (get-two-way-token v) "}}")
+                       ;;     ;;FIXME
+                       ;;     (str  ;;miraj-polymer-attrib-binding-flag
+                       ;;           "{{" (subs (str v) 1) "}}")))
 
                        (symbol? v) (str "[[" (str v) "]]")
 
@@ -389,6 +389,16 @@
                                                        ;; miraj-polymer-attrib-binding-flag
                                                        " *\\{\\{miraj.polymer/"))
                                       "\\$=\"\\{\\{")
+                       s (str/replace s
+                                      (re-pattern (str "=\""
+                                                       " *miraj.polymer.binding.attr.one/"
+                                                       "(.*)\""))
+                                      "\\$=\"\\[\\[$1]]\"")
+                       s (str/replace s
+                                      (re-pattern (str "=\""
+                                                       " *miraj.polymer.binding.attr.two/"
+                                                       "(.*)\""))
+                                      "\\$=\"\\{\\{$1}}\"")
                        s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
                        ;; regx (re-pattern (str "=\"" miraj-boolean-tag "\""))
                        ;;regx (re-pattern (str miraj-boolean-tag "="))
@@ -694,10 +704,14 @@
     (let [nm (name kw)
           ns (namespace kw)]
       (Event. :kw nil nil
-              (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}"))))
-              ;; FIXME this should not be necessary if the tag fns are correct?
-              ;; (if (nil? (namespace kw))
-              ;;   (str "class=\"" (str/replace (name kw) "." " ") "\"")))))
+              (if (= ns "miraj.polymer.binding.one")
+                (str "[[" (name kw) "]]")
+                (if (= ns "miraj.polymer.binding.two")
+                  (str "{{" (name kw) "}}")
+                  ;;(str kw))))))
+                  (do (log/warn (format "DEPRECATED: keyword %s for Polymer two-way binding.  Use (miraj.polymer/bind!! %s) instead.\n"
+                                        kw kw))
+                      (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}")))))))
 
   (next-events [_ next-items]
     next-items)
@@ -706,10 +720,11 @@
   (gen-event [sym]
     (let [nm (name sym)
           ns (namespace sym)]
-      ;; (log/trace "gen-event Symbol: " sym)
+      (log/warn (format "DEPRECATED: symbol '%s for Polymer one-way binding.  Use (miraj.polymer/bind! %s) instead.\n"
+                        sym (keyword (str sym))))
       (Event. :sym nil nil
               (str "[[" ns (if ns ".") nm "]]"))))
-      ;;         (str "[[" (namespace kw) (if (namespace kw) ".") (name kw) "]]")))))
+
   (next-events [_ next-items]
     next-items)
 
@@ -800,10 +815,10 @@
   [tag attr]
   ;; id, class, and boolean attr: must come first, and be chained
   ;; e.g.  :#foo.bar.baz?centered
-  ;; (span ::foo) => <span id="foo"></span>
-  ;; (span ::foo.bar) => <span id="foo" class="bar"></span>
-  ;; (span ::.foo.bar) => <span class="foo bar"></span>
-  ;; (span :bool/foo) => <span foo></span>
+  ;; (span :#foo) => <span id="foo"></span>
+  ;; (span :#foo.bar) => <span id="foo" class="bar"></span>
+  ;; (span :.foo.bar) => <span class="foo bar"></span>
+  ;; (span :?foo) => <span foo></span>
   ;; (log/info "VALIDATE-KW-ATTRIB: " attr)
   (if (nil? (namespace attr)) ;; (span :foo) => <span>[[foo]]</span>
     (let [token (name attr)]
@@ -909,12 +924,12 @@
       [{} (remove empty? (list attrs content))])
     (let [non-style-attrs (apply hash-map
                                  (flatten (filter (fn [[k v]]
-                                                ;; (log/debug (format "KV %s %s" k v))
-                                                (if (not (keyword? k)) ;; (attr-sym? k)))
-                                                  (throw (Exception.
-                                                          (format "Only keyword attr names supported: %s is %s"
-                                                                  k (type k)))))
-                                                ;;(or ;; (= k miraj-pseudo-kw)
+                                                    ;; (log/debug (format "KV %s %s" k v))
+                                                    (if (not (keyword? k)) ;; (attr-sym? k)))
+                                                      (throw (Exception.
+                                                              (format "Only keyword attr names supported: %s is %s"
+                                                                      k (type k)))))
+                                                    ;;(or ;; (= k miraj-pseudo-kw)
                                                     ;; (and (list? k) (= 'clojure.core/deref
                                                     ;;                   (first k)))
                                                     (let [attr-ns (namespace k)
@@ -926,33 +941,11 @@
                                                        ;; (not= attr-ns "miraj.polymer")
                                                        ;; (not= attr-ns "miraj.style")
                                                        (nil? attr-ns))))
-                                                      ;; (java.lang.Character/isLetter c))))
-                                              ;; FIXME: why did we dissoc :content?
-                                              ;; (dissoc attrs :content))))
-                                              attrs)))
+                                                  ;; (java.lang.Character/isLetter c))))
+                                                  ;; FIXME: why did we dissoc :content?
+                                                  ;; (dissoc attrs :content))))
+                                                  attrs)))
           ;; _ (log/debug (format "NON-STYLE Attrs  %s" non-style-attrs))
-
-          ;; FIXME: what is attrib-bindings for???
-          ;; attrib-bindings (apply hash-map
-          ;;                         (flatten (filter (fn [[k v]]
-          ;;                                            (log/debug (format "KV %s %s" k v))
-          ;;                                            (let [attr-ns (namespace k)
-          ;;                                                  attr-name (name k)]
-          ;;                                              (not (nil? attr-ns))
-          ;;                                              #_(= attr-ns "miraj.polymer")))
-          ;;                                              ;; (str/ends-with? attr-name "$")))
-          ;;                                          attrs)))
-          ;; _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
-
-          ;; attrib-bindings ;; {::attrib-binding
-          ;;                  (into {} (map (fn [[k v]]
-          ;;                         (let [nm (clojure.core/name k)]
-          ;;                           ;; {(keyword (subs nm 0 (str/last-index-of nm \$)))
-          ;;                           {(keyword nm)
-          ;;                            (keyword (namespace k) (clojure.core/name v))}))
-          ;;                       attrib-bindings))
-          ;; ;;}
-          ;; _ (log/debug (format "ATTRIB BINDINGS  %s" attrib-bindings))
 
           plain-style-attrs (apply hash-map
                               (flatten (filter (fn [[k v]]
