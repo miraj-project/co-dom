@@ -48,7 +48,7 @@
 (def ^:dynamic *pprint* false)
 
 (defonce miraj-boolean-tag "__MIRAJ_BOOLEAN_5HgyKgZoQSuzPt9U")
-(defonce miraj-polymer-attrib-binding-flag "__MIRAJ_POLYMER_ATTR_BINDING_e0c9cd95-e1c7-4fa7-a4c7-614f7e3f0a52")
+;; (defonce miraj-polymer-attrib-binding-flag "__MIRAJ_POLYMER_ATTR_BINDING_e0c9cd95-e1c7-4fa7-a4c7-614f7e3f0a52")
 ;; (defonce miraj-polymer-attrib-binding-kw ::attrib-binding)
 (defonce miraj-pseudo-kw :__MIRAJ_PSEUDO_sfmWqa5HptMJ6ATR)
 
@@ -391,12 +391,12 @@
                                       "\\$=\"\\{\\{")
                        s (str/replace s
                                       (re-pattern (str "=\""
-                                                       " *miraj.polymer.binding.attr.one/"
+                                                       " *:miraj.polymer.binding.attr.one/"
                                                        "(.*)\""))
                                       "\\$=\"\\[\\[$1]]\"")
                        s (str/replace s
                                       (re-pattern (str "=\""
-                                                       " *miraj.polymer.binding.attr.two/"
+                                                       " *:miraj.polymer.binding.attr.two/"
                                                        "(.*)\""))
                                       "\\$=\"\\{\\{$1}}\"")
                        s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
