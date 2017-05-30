@@ -7,7 +7,7 @@
 
  :repositories #(conj % ["clojars" {:url "https://clojars.org/repo/"}])
 
- :dependencies   '[[org.clojure/clojure RELEASE]
+ :dependencies   '[[org.clojure/clojure "1.9.0-alpha17"]
                    [org.clojure/data.json "0.2.6"]
                    [clj-time "0.11.0"]
 
