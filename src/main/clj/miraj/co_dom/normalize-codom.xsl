@@ -15,7 +15,7 @@
 	  <xsl:text>/miraj/polymer/assets/polymer/polymer.html</xsl:text>
 	</xsl:attribute>
       </xsl:element>
-      <xsl:apply-templates select='//link' mode='head'/>
+      <xsl:apply-templates select="//link[@rel='import']" mode='head'/>
       <xsl:element name='dom-module'>
 	<xsl:attribute name='id'>
 	  <xsl:value-of select='@id'/>
@@ -34,6 +34,11 @@
   </xsl:template>
 
   <xsl:template match='link'/>
+  <xsl:template match="link[@rel='stylesheet']">
+    <xsl:copy>
+      <xsl:apply-templates select='@*|node()'/>
+    </xsl:copy>
+  </xsl:template>
   <xsl:template match='link' mode='head'>
     <xsl:copy>
       <xsl:apply-templates select='@*|node()'/>
