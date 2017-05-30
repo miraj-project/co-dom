@@ -197,15 +197,19 @@
                        ;;                           k " " v "}; valid values are: "
                        ;;                           html5-link-types))))
 
-                       ;; (keyword? v)
-                       ;; (do ;;(println "KEYWORD")
-                       ;;   (if (nil? (namespace v))
-                       ;;     (str "{{" (get-two-way-token v) "}}")
-                       ;;     ;;FIXME
-                       ;;     (str  ;;miraj-polymer-attrib-binding-flag
-                       ;;           "{{" (subs (str v) 1) "}}")))
+                       (keyword? v)
+                       (do ;;(println "KEYWORD")
+                         (if (nil? (namespace v))
+                           (name v)
+                           (subs (str v) 1)))
+                           ;; (str "{{" (get-two-way-token v) "}}")
+                           ;;FIXME
+                           ;; (str  ;;miraj-polymer-attrib-binding-flag
+                           ;;       "{{" (subs (str v) 1) "}}")))
 
-                       (symbol? v) (str "[[" (str v) "]]")
+                       (symbol? v) ;;(str "[[" (str v) "]]")
+                       ;;(str (str (gensym)) (str v))
+                       (throw (Exception. (str "Symbol not allowed as attribute value: %s"v)))
 
                        ;;(nil? v) miraj-boolean-tag
 
@@ -335,7 +339,7 @@
                (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        ;; _ (log/info "XML PPRINT SERIALIZED: " ml)
+        _ (log/info "XML PPRINT SERIALIZED: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -347,6 +351,7 @@
         ;; _ (log/debug (format "XSL-ID-X %s" xsl-identity-transform-html))
         transformer (if (= :html @mode)
                       (let [r (io/resource "miraj/co_dom/identity-html.xsl")
+                            _ (log/trace  "RRRRRRRRRRRRRRRR:" r)
                             xsl (slurp r)]
                         ;; (StringReader. xsl-identity-transform-html))))
                         (.newTransformer factory (StreamSource. (StringReader. xsl))))
@@ -722,8 +727,9 @@
           ns (namespace sym)]
       (log/warn (format "DEPRECATED: symbol '%s for Polymer one-way binding.  Use (miraj.polymer/bind! %s) instead.\n"
                         sym (keyword (str sym))))
-      (Event. :sym nil nil
-              (str "[[" ns (if ns ".") nm "]]"))))
+      #_(Event. :sym nil nil
+              ;;(str "[[" ns (if ns ".") nm "]]")
+              [(gensym) sym])))
 
   (next-events [_ next-items]
     next-items)
@@ -941,11 +947,19 @@
                                                        ;; (not= attr-ns "miraj.polymer")
                                                        ;; (not= attr-ns "miraj.style")
                                                        (nil? attr-ns))))
-                                                  ;; (java.lang.Character/isLetter c))))
-                                                  ;; FIXME: why did we dissoc :content?
-                                                  ;; (dissoc attrs :content))))
                                                   attrs)))
           ;; _ (log/debug (format "NON-STYLE Attrs  %s" non-style-attrs))
+
+          ;; event-attrs (apply hash-map
+          ;;                    (flatten (filter (fn [[k v]]
+          ;;                                       ;; (log/debug (format "KV %s %s" k v))
+          ;;                                       (if-let [attr-ns (namespace k)]
+          ;;                                                ;;attr-name (name k)]
+          ;;                                         (do (log/trace "EVENT-ATTR ns:" attr-ns)
+          ;;                                             (= attr-ns "miraj.polymer.protocols"))
+          ;;                                         false))
+          ;;                                     attrs)))
+          ;; _ (log/debug (format "EVENT Attrs  %s" event-attrs))
 
           plain-style-attrs (apply hash-map
                               (flatten (filter (fn [[k v]]
@@ -988,46 +1002,6 @@
           ]
       ;; (log/debug (format "VALIDS %s" valids))
       [valids pseudo-style-attrs])))
-
-;; (defn parse-elt-args
-;;   [tag attrs content]
-;;   (log/info "parse-elt-args TAG " tag " ATTRS: " attrs " CONTENT: " content)
-;;   (if (empty? attrs)
-;;     [attrs content]
-;;     (let [special-kws (filter (fn [tok]
-;;                                 (and (keyword? tok)
-;;                                      (nil? (namespace tok))
-;;                                      (let [tokstr (name tok)]
-;;                                        (or (.startsWith tokstr "#")
-;;                                            (.startsWith tokstr ".")
-;;                                            (.startsWith tokstr "?")))))
-;;                               content)
-;;           content (filter (fn [tok]
-;;                             (or (not (keyword? tok))
-;;                                 (not (nil? (namespace tok)))
-;;                                 (let [tokstr (name tok)]
-;;                                   (not (or (.startsWith tokstr "#")
-;;                                            (.startsWith tokstr ".")
-;;                                            (.startsWith tokstr "?"))))))
-;;                           content)]
-;;       ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
-;;       ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
-;;       (cond
-;;         ;;TODO support boolean, etc. for CDATA elts
-;;         (number? attrs)
-;;         (do ;;(println "number? attrs: " attrs)
-;;           ;; (span 3) => <span>3</span>
-;;           [{} (remove empty? (list (str attrs) content))])
-
-;;         (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
-;;         [{} (list attrs (remove nil? content))]
-
-;;         (keyword? attrs) (validate-kw-attrib tag attrs content)
-
-;;         (map? attrs) (normalize-attributes tag attrs content)
-
-;;         :else (do ;;(println "NOT map attrs: " attrs)
-;;                 [{} (remove empty? (list attrs content))])))))
 
 (defn ->css [m]
   (str "{" (str/join ";" (for [[k v] m]
