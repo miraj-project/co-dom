@@ -339,7 +339,7 @@
                (let [s (serialize-raw :xml s)]
                  (reset! mode fmt)
                  s)))
-        _ (log/info "XML PPRINT SERIALIZED: " ml)
+        ;; _ (log/info "XML PPRINT SERIALIZED: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult.
                    (let [sw (StringWriter.)]
@@ -351,7 +351,6 @@
         ;; _ (log/debug (format "XSL-ID-X %s" xsl-identity-transform-html))
         transformer (if (= :html @mode)
                       (let [r (io/resource "miraj/co_dom/identity-html.xsl")
-                            _ (log/trace  "RRRRRRRRRRRRRRRR:" r)
                             xsl (slurp r)]
                         ;; (StringReader. xsl-identity-transform-html))))
                         (.newTransformer factory (StreamSource. (StringReader. xsl))))
