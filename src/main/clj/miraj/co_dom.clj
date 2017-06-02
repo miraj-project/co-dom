@@ -296,7 +296,7 @@
                (do ;;(println (type elts))
                    (throw (Exception. "xsl-xform only works on miraj.co-dom.Element"))))
              (serialize-raw :xml elts))
-        ;; _ (println "XF SOURCE: " ml)
+        ;; _ (log/trace "XF SOURCE: " ml)
         xmlSource (StreamSource.  (StringReader. ml))
         xmlOutput (StreamResult. (StringWriter.))
         factory (TransformerFactory/newInstance)
@@ -713,7 +713,7 @@
                 (if (= ns "miraj.polymer.binding.two")
                   (str "{{" (name kw) "}}")
                   ;;(str kw))))))
-                  (do (log/warn (format "DEPRECATED: keyword %s for Polymer two-way binding.  Use (miraj.polymer/bind!! %s) instead.\n"
+                  (do (log/warn (format "DEPRECATED: keyword %s for Polymer two-way binding.  Use (miraj.polymer/bind!! %s) instead."
                                         kw kw))
                       (str "{{" (namespace kw) (if (namespace kw) ".") (name kw) "}}")))))))
 
