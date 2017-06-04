@@ -53,7 +53,11 @@
 (defonce miraj-pseudo-kw :__MIRAJ_PSEUDO_sfmWqa5HptMJ6ATR)
 
 (defn pprint-str [m]
-  (let [w (StringWriter.)] (pp/pprint m w)(.toString w)))
+  ;; (log/trace "*print-readably*:" *print-readably*)
+  ;; (log/trace "*print-pretty*:" pp/*print-pretty*)
+  (with-out-str (pp/write m :dispatch pp/code-dispatch))
+  ;;(prn-str m)
+  #_(let [w (StringWriter.)] (pp/pprint m w)(.toString w)))
 
 
 (def html5-void-elts
@@ -1507,8 +1511,7 @@
         newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds}) ;; :uri uri :_webcomponent true})
                        (fn [& args]
                          (let [elt (if (empty? args)
-                                     (do (println "COMPONENT FN NO ARGS: " elt-kw)
-                                         (element elt-kw))
+                                     (element elt-kw)
                                      (let [first (first args)
                                            rest (rest args)
                                            [attrs content] (parse-elt-args first rest)]
