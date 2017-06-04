@@ -19,7 +19,7 @@
                                                       com.sun.jmx/jmxri]]
 
                    ;; testing only
-                   ;; [miraj/core "0.1.0-SNAPSHOT"          :scope "test"]
+                   ;; [miraj/core "1.0.0-SNAPSHOT"          :scope "test"]
                    ;; [miraj/html "5.1.0-SNAPSHOT"          :scope "test"]
                    ;; [miraj.polymer/paper "1.2.3-SNAPSHOT" :scope "test"]
                    ;; [miraj.polymer/iron "1.2.3-SNAPSHOT"  :scope "test"]
@@ -38,15 +38,29 @@
        :description "Base library supporting functional HTML - see also miraj/html"
        :url         "https://github.com/miraj-project/co-dom"
        :scm         {:url "https://github.com/miraj-project/co-dom.git"}
-       :license     {"EPL" "http://www.eclipse.org/legal/epl-v10.html"}})
+       :license     {"EPL" "http://www.eclipse.org/legal/epl-v10.html"}}
+ push {:repo "clojars"})
 
 (deftask build
   "build"
   []
   (comp (pom)
+        (jar)))
+
+(deftask install-local
+  "Build and install component libraries"
+  []
+  (comp (build)
+        (pom)
         (jar)
-        (install)
-        (target)))
+        (target)
+        (install)))
+
+(deftask deploy
+  "deploy to clojars"
+  []
+  (comp (install-local)
+        (push)))
 
 (deftask dev
   "watch etc. for dev using checkout"
@@ -54,8 +68,7 @@
   (comp (watch)
         (notify :audible true)
         #_(refresh)
-        (pom)
-        (jar)
+        (build)
         (target)
         (install)))
 
