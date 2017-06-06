@@ -24,45 +24,49 @@
     <xsl:copy>
       <xsl:apply-templates select='meta[@name="charset"]' mode='optimize'/>
 
-      <!-- FIXME: the following should be in normalize or somewhere else other than optimize-js -->
-      <xsl:element name="script">
-        <xsl:text>(function() {
-  if ('registerElement' in document
-      &amp;&amp; 'import' in document.createElement('link')
-      &amp;&amp; 'content' in document.createElement('template')) {
-    // platform is good!
-    // console.log('No Polyfill needed!');
-   } else {
-    // polyfill the platform!
-    // console.log('Using Polyfill!');
-    var e = document.createElement('script');
-    e.src = '/miraj/polymer/assets/webcomponentsjs/webcomponents.js';
-    document.head.insertBefore(e, document.head.firstChild);
-   };
+      <!-- For Polymer v1, always use polyfill: -->
+      <script src="bower_components/webcomponentsjs/webcomponents-lite.js"></script>
 
-   if(document.head.createShadowRoot) {
-     // console.log('Shadow DOM v0 supported!');
-      if(document.head.attachShadow) {
-      // console.log('(Shadow DOM v1 supported by browswer but not used with this version of Miraj/Polymer)');
-      }
-     // polymer v1 default is shady dom; to switch, run this script before Polymer is imported */
-     // console.log('Switching from default Shady DOM to v0 Shadow DOM.');
-     window.Polymer = {
-      dom: 'shadow',
-      lazyRegister: true
-      };
-    } else if(document.head.attachShadow) {
-          // console.log('Shadow DOM v0 unsupported!');
-          // console.log('Shadow DOM v1 supported!');
-	  // currently Miraj only supports Polymer v1.x, which supports Webcomponents v0,
-	  // so on browsers that support v1 Shadow DOM but not v0 (e.g. Safari 10),
-	  // Polymer version 1.x will always use Shady DOM.
-	  // console.log('Using v0 Shady DOM');
-    } else {
-    // console.log('Shadow DOM unsupported!');
-    }
-})();</xsl:text>
-      </xsl:element>
+      <!-- The following does not work with Polymer v1: -->
+      <!-- FIXME: the following should be in normalize or somewhere else other than optimize-js -->
+<!--       <xsl:element name="script"> -->
+<!--         <xsl:text>(function() { -->
+<!--   if ('registerElement' in document -->
+<!--       &amp;&amp; 'import' in document.createElement('link') -->
+<!--       &amp;&amp; 'content' in document.createElement('template')) { -->
+<!--     // platform is good! -->
+<!--     // console.log('No Polyfill needed!'); -->
+<!--    } else { -->
+<!--     // polyfill the platform! -->
+<!--     // console.log('Using Polyfill!'); -->
+<!--     var e = document.createElement('script'); -->
+<!--     e.src = '/miraj/polymer/assets/webcomponentsjs/webcomponents.js'; -->
+<!--     document.head.insertBefore(e, document.head.firstChild); -->
+<!--    }; -->
+
+<!--    if(document.head.createShadowRoot) { -->
+<!--      // console.log('Shadow DOM v0 supported!'); -->
+<!--       if(document.head.attachShadow) { -->
+<!--       // console.log('(Shadow DOM v1 supported by browswer but not used with this version of Miraj/Polymer)'); -->
+<!--       } -->
+<!--      // polymer v1 default is shady dom; to switch, run this script before Polymer is imported */ -->
+<!--      // console.log('Switching from default Shady DOM to v0 Shadow DOM.'); -->
+<!--      window.Polymer = { -->
+<!--       dom: 'shadow', -->
+<!--       lazyRegister: true -->
+<!--       }; -->
+<!--     } else if(document.head.attachShadow) { -->
+<!--           // console.log('Shadow DOM v0 unsupported!'); -->
+<!--           // console.log('Shadow DOM v1 supported!'); -->
+<!-- 	  // currently Miraj only supports Polymer v1.x, which supports Webcomponents v0, -->
+<!-- 	  // so on browsers that support v1 Shadow DOM but not v0 (e.g. Safari 10), -->
+<!-- 	  // Polymer version 1.x will always use Shady DOM. -->
+<!-- 	  // console.log('Using v0 Shady DOM'); -->
+<!--     } else { -->
+<!--     // console.log('Shadow DOM unsupported!'); -->
+<!--     } -->
+<!-- })();</xsl:text> -->
+<!--       </xsl:element> -->
       <xsl:apply-templates select='//script' mode='polyfill'/>
       <xsl:apply-templates select='@*|node()'/>
     </xsl:copy>
