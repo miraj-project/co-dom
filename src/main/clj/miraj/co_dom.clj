@@ -392,21 +392,21 @@
                        s (str/replace s #"_EMPTY_333109" "")
                        s (str/replace s #"<!\[CDATA\[" "")
                        s (str/replace s #"]]>" "")
+                       ;; s (str/replace s
+                       ;;                (re-pattern (str "=\""
+                       ;;                                 ;; miraj-polymer-attrib-binding-flag
+                       ;;                                 " *\\{\\{miraj.polymer/"))
+                       ;;                "\\$=\"\\{\\{")
                        s (str/replace s
                                       (re-pattern (str "=\""
-                                                       ;; miraj-polymer-attrib-binding-flag
-                                                       " *\\{\\{miraj.polymer/"))
-                                      "\\$=\"\\{\\{")
-                       s (str/replace s
-                                      (re-pattern (str "=\""
-                                                       " *:miraj.polymer.binding.attr.one/"
+                                                       " *\\[\\[miraj.polymer.binding.attr.one/"
                                                        "(.*)\""))
-                                      "\\$=\"\\[\\[$1]]\"")
+                                      "\\$=\"\\[\\[$1\"")
                        s (str/replace s
                                       (re-pattern (str "=\""
-                                                       " *:miraj.polymer.binding.attr.two/"
+                                                       " *\\{\\{miraj.polymer.binding.attr.two/"
                                                        "(.*)\""))
-                                      "\\$=\"\\{\\{$1}}\"")
+                                      "\\$=\"\\{\\{$1\"")
                        s (str/replace s (re-pattern (str "=\"" miraj-boolean-tag "\"")) "")
                        ;; regx (re-pattern (str "=\"" miraj-boolean-tag "\""))
                        ;;regx (re-pattern (str miraj-boolean-tag "="))
