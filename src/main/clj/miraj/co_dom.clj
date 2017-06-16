@@ -36,6 +36,7 @@
            [javax.xml.transform.stream StreamSource StreamResult]
            [java.nio.charset Charset]
            [java.io Reader]))
+
            ;; [miraj NSException]))
 ;;           [java.util Date]))
 
@@ -418,7 +419,7 @@
                      #_(.toString (.getWriter xmlOutput))))]
     ;; (prn "OUTPUT: " result)
     result))
-
+ 
 (defn pprint
   [& elts]
   ;; (println "PPRINT elts: " elts)
@@ -791,7 +792,7 @@
          (cons f
                (flatten-elements (next-events e (rest elements)))))))))
 
-(declare parse-elt-args)
+;; (declare parse-elt-args)
 
 (defn attr-map?
   [m]
@@ -1011,6 +1012,46 @@
                            (str (clojure.core/name k) ":"
                                 (if (= k :content) (str "'" v "'") v))))
        "}"))
+
+;; (defn parse-elt-args
+;;   [tag attrs content]
+;;   (log/info "parse-elt-args TAG " tag " ATTRS: " attrs " CONTENT: " content)
+;;   (if (empty? attrs)
+;;     [attrs content]
+;;     (let [special-kws (filter (fn [tok]
+;;                                 (and (keyword? tok)
+;;                                      (nil? (namespace tok))
+;;                                      (let [tokstr (name tok)]
+;;                                        (or (.startsWith tokstr "#")
+;;                                            (.startsWith tokstr ".")
+;;                                            (.startsWith tokstr "!")))))
+;;                               content)
+;;           content (filter (fn [tok]
+;;                             (or (not (keyword? tok))
+;;                                 (not (nil? (namespace tok)))
+;;                                 (let [tokstr (name tok)]
+;;                                   (not (or (.startsWith tokstr "#")
+;;                                            (.startsWith tokstr ".")
+;;                                            (.startsWith tokstr "!"))))))
+;;                           content)]
+;;       ;; (log/debug (format "SPECIAL KWS %s" (seq special-kws)))
+;;       ;; (log/debug (format "CLEANED CONTENT %s" (seq content)))
+;;       (cond
+;;         ;;TODO support boolean, etc. for CDATA elts
+;;         (number? attrs)
+;;         (do ;;(println "number? attrs: " attrs)
+;;           ;; (span 3) => <span>3</span>
+;;           [{} (remove empty? (list (str attrs) content))])
+
+;;         (symbol? attrs) ;; (span 'foo) => <span>{{foo}}</span>
+;;         [{} (list attrs (remove nil? content))]
+
+;;         (keyword? attrs) (validate-kw-attrib tag attrs content)
+
+;;         (map? attrs) (normalize-attributes tag attrs content)
+
+;;         :else (do ;;(println "NOT map attrs: " attrs)
+;;                 [{} (remove empty? (list attrs content))])))))
 
 (defn element
   [tag & args]
@@ -1506,21 +1547,30 @@
 
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  ;; (log/trace "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
+  (log/trace "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))
-        newvar (intern ns-sym (with-meta (symbol (str nm-sym)) {:doc ds}) ;; :uri uri :_webcomponent true})
+        fn-sym (symbol (str nm-sym))
+        newvar (intern ns-sym (with-meta fn-sym {:doc ds}) ;; :uri uri :_webcomponent true})
                        (fn [& args]
+                         (log/trace "HTML ARGS:" args)
                          (let [elt (if (empty? args)
                                      (element elt-kw)
-                                     (let [first (first args)
+                                     #_(let [first (first args)
                                            rest (rest args)
-                                           [attrs content] (parse-elt-args first rest)]
-                                       (apply element elt-kw attrs content)))]
+                                           ;; _ (log/trace "CTOR first:" first)
+                                           ;; _ (log/trace "CTOR rest:" rest)
+                                           [attrs content] (apply parse-elt-args
+                                                                  fn-sym args)]
+                                       (log/trace "HTML attrs: " attrs)
+                                       (log/trace "HTML content: " content)
+                                       (apply element elt-kw args #_attrs #_content))
+                                     (apply element elt-kw args #_attrs #_content))]
+                           (log/trace "HTML elt:" elt) 
                            elt)))]
     ;; (log/trace "NS-SYM: " ns-sym)
     ;; (log/trace "NM-SYM: " nm-sym)
-    ;; (log/trace "VAR: " newvar)
-    ;; (log/trace "HTML var:" (deref newvar))
+    (log/trace "VAR: " newvar)
+    (log/trace "HTML var:" (deref newvar))
     newvar))
   ;; (alter-meta! (find-var ns-sym nm-sym)
   ;;              (fn [old new]
@@ -1533,7 +1583,7 @@
 
 (declare <<!)
 
-  ;; (let [s (if (= (first mode) :pprint)
+;; (let [s (if (= (first mode) :pprint)
   ;;           (do (println "pprint")
   ;;               (with-out-str (pprint doc)))
   ;;           (serialize doc))]
