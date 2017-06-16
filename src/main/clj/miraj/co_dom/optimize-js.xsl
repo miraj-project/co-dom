@@ -25,7 +25,7 @@
       <xsl:apply-templates select='meta[@name="charset"]' mode='optimize'/>
 
       <!-- For Polymer v1, always use polyfill: -->
-      <script src="bower_components/webcomponentsjs/webcomponents-lite.js"></script>
+      <script src="/miraj/polymer/assets/webcomponentsjs/webcomponents-lite.js"></script>
 
       <!-- The following does not work with Polymer v1: -->
       <!-- FIXME: the following should be in normalize or somewhere else other than optimize-js -->
@@ -92,7 +92,7 @@
   </xsl:template>
 
   <!-- FIXME - put webcomponentsjs after all <meta> elts? -->
-  <!-- (h/script {:src "bower_components/webcomponentsjs/webcomponents-lite.js"}) -->
+  <!-- (h/script {:src "/miraj/polymer/assets/webcomponentsjs/webcomponents-lite.js"}) -->
   <xsl:template match='script' mode='polyfill'/>
   ;; "<xsl:template match='script[contains(@src, "webcomponentsjs")]'/>
   <xsl:template match='script[contains(@src, "webcomponentsjs")]' mode='optimize' priority='99'/>
