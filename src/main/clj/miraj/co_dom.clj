@@ -419,7 +419,7 @@
                      #_(.toString (.getWriter xmlOutput))))]
     ;; (prn "OUTPUT: " result)
     result))
- 
+
 (defn pprint
   [& elts]
   ;; (println "PPRINT elts: " elts)
@@ -1547,12 +1547,12 @@
 
 (defn html-constructor
   [ns-sym nm-sym elt-kw uri & docstring]
-  (log/trace "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
+  ;; (log/trace "HTML-CONSTRUCTOR:" ns-sym nm-sym elt-kw uri docstring)
   (let [ds (if (empty? docstring) "" (first docstring))
         fn-sym (symbol (str nm-sym))
         newvar (intern ns-sym (with-meta fn-sym {:doc ds}) ;; :uri uri :_webcomponent true})
                        (fn [& args]
-                         (log/trace "HTML ARGS:" args)
+                         ;; (log/trace "HTML ARGS:" args)
                          (let [elt (if (empty? args)
                                      (element elt-kw)
                                      #_(let [first (first args)
@@ -1565,12 +1565,12 @@
                                        (log/trace "HTML content: " content)
                                        (apply element elt-kw args #_attrs #_content))
                                      (apply element elt-kw args #_attrs #_content))]
-                           (log/trace "HTML elt:" elt) 
+                           ;; (log/trace "HTML elt:" elt)
                            elt)))]
     ;; (log/trace "NS-SYM: " ns-sym)
     ;; (log/trace "NM-SYM: " nm-sym)
-    (log/trace "VAR: " newvar)
-    (log/trace "HTML var:" (deref newvar))
+    ;; (log/trace "VAR: " newvar)
+    ;; (log/trace "HTML var:" (deref newvar))
     newvar))
   ;; (alter-meta! (find-var ns-sym nm-sym)
   ;;              (fn [old new]
